@@ -1,0 +1,4 @@
+name = "FiniteFieldArithmetic"
+uuid = "73eabe54-ef1b-4d04-bb6e-801967fb358c"
+authors = ["Daniel Boigk and contributors"]
+version = "0.1.0-dev"
