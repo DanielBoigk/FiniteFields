@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+    <channel>
+      <title>FiniteFields</title>
+      <link>https://mathstruct.org/FiniteFields</link>
+      <description>Last 10 notes on FiniteFields</description>
+      <generator>Quartz -- quartz.jzhao.xyz</generator>
+      <item>
+    <title>Backlog</title>
+    <link>https://mathstruct.org/FiniteFields/Project/Backlog</link>
+    <guid>https://mathstruct.org/FiniteFields/Project/Backlog</guid>
+    <description><![CDATA[ overview Planned work, by section, and the ledger of open sorrys. A row moves to Done with the commit that completes it. ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item><item>
+    <title>Decisions</title>
+    <link>https://mathstruct.org/FiniteFields/Project/Decisions</link>
+    <guid>https://mathstruct.org/FiniteFields/Project/Decisions</guid>
+    <description><![CDATA[  ADR-0001 Use MathStruct Quartz ADR-0002 Reuse mathlib ADR-0003 Keep Julia and Lean in one repository ADR-0004 Nimbers as the default representation of GF(2^n) Add a dated or numbered ADR when a choice affects architecture, interfaces, dependencies, or mathematical conventions. ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item><item>
+    <title>ADR-0001 Use MathStruct Quartz</title>
+    <link>https://mathstruct.org/FiniteFields/Project/Decisions/ADR-0001-Use-MathStruct-Quartz</link>
+    <guid>https://mathstruct.org/FiniteFields/Project/Decisions/ADR-0001-Use-MathStruct-Quartz</guid>
+    <description><![CDATA[ ADR-0001: Use MathStruct Quartz Status: accepted Context The project needs a browsable Obsidian vault with mathematical documentation and TikZ diagrams. ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item><item>
+    <title>ADR-0002 Reuse mathlib</title>
+    <link>https://mathstruct.org/FiniteFields/Project/Decisions/ADR-0002-Reuse-mathlib</link>
+    <guid>https://mathstruct.org/FiniteFields/Project/Decisions/ADR-0002-Reuse-mathlib</guid>
+    <description><![CDATA[ ADR-0002: Reuse mathlib Status: accepted Context Lean is intended to state and prove the project’s mathematics, but finite-field constructions and theorems may already exist in mathlib. ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item><item>
+    <title>ADR-0003 Keep Julia and Lean in one repository</title>
+    <link>https://mathstruct.org/FiniteFields/Project/Decisions/ADR-0003-Keep-Julia-and-Lean-in-one-repository</link>
+    <guid>https://mathstruct.org/FiniteFields/Project/Decisions/ADR-0003-Keep-Julia-and-Lean-in-one-repository</guid>
+    <description><![CDATA[ ADR-0003: Keep Julia and Lean in one repository Status: accepted Context Julia is the executable library and Lean is its formal specification/proof environment. ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item><item>
+    <title>ADR-0004 Nimbers as the default representation of GF(2^n)</title>
+    <link>https://mathstruct.org/FiniteFields/Project/Decisions/ADR-0004-Nimbers-as-the-default-representation-of-GF(2%5En)</link>
+    <guid>https://mathstruct.org/FiniteFields/Project/Decisions/ADR-0004-Nimbers-as-the-default-representation-of-GF(2%5En)</guid>
+    <description><![CDATA[ design characteristic-2 Status: accepted (2026-11-19, maintainer). ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item><item>
+    <title>Lean and mathlib</title>
+    <link>https://mathstruct.org/FiniteFields/Project/Lean-and-mathlib</link>
+    <guid>https://mathstruct.org/FiniteFields/Project/Lean-and-mathlib</guid>
+    <description><![CDATA[ Lean files live under lean/; lean/lean-toolchain and the mathlib release in lakefile.lean are intentionally aligned. ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item><item>
+    <title>Problems</title>
+    <link>https://mathstruct.org/FiniteFields/Project/Problems</link>
+    <guid>https://mathstruct.org/FiniteFields/Project/Problems</guid>
+    <description><![CDATA[ Record each discovered defect with an identifier, a minimal reproduction, expected and actual behavior, and links to the affected specification and code. ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item><item>
+    <title>Status</title>
+    <link>https://mathstruct.org/FiniteFields/Project/Status</link>
+    <guid>https://mathstruct.org/FiniteFields/Project/Status</guid>
+    <description><![CDATA[ overview Handoff for the next session: where the work stands, what is next, and what is open. ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item><item>
+    <title>Prime field arithmetic</title>
+    <link>https://mathstruct.org/FiniteFields/Specifications/Prime-field-arithmetic</link>
+    <guid>https://mathstruct.org/FiniteFields/Specifications/Prime-field-arithmetic</guid>
+    <description><![CDATA[ Status: planned. Lean reuses mathlib’s field structure (smoke test only). ]]></description>
+    <pubDate>Thu, 19 Nov 2026 19:58:50 GMT</pubDate>
+  </item>
+    </channel>
+  </rss>
