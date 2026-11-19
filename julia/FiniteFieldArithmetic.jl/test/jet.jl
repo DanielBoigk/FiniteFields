@@ -2,7 +2,8 @@
 # dispatch in the arithmetic hot paths. (DispatchDoctor's `@stable` in the source additionally
 # throws on any type-unstable call to an arithmetic method; the test suite exercises them all.)
 using FiniteFieldArithmetic
-using FiniteFieldArithmetic: mul, inverse, Recursive, MulTable, LogTable, LogTable16, CLMul
+using FiniteFieldArithmetic: mul, inverse, Recursive, MulTable, LogTable, LogTable16, CLMul,
+    ScalarMatMul, TableMatMul, CLMulMatMul, matmul!, mul_elementwise!
 using JET, Test
 
 @testset "JET" begin
@@ -24,5 +25,20 @@ using JET, Test
             @test_opt inverse(s, x)
         end
         @test_opt x^7
+    end
+    # bulk operations (J8)
+    for F in (GF256, GF2_16, GF2_32, GF2_64, GF2_128)
+        x = F(0x53)
+        A, B, C = fill(x, 3, 3), fill(x, 3, 3), fill(x, 3, 3)
+        m = MulBy(x)
+        @test_opt m(x)
+        for s in (ScalarMatMul(MulTable()), TableMatMul(), CLMulMatMul())
+            @test_opt matmul!(s, C, A, B)
+        end
+        @test_opt A * B
+    end
+    for F in (GF256, GF2_16, GF2_32)
+        v = BitslicedVector(fill(F(3), 70))
+        @test_opt mul_elementwise!(v, v, v)
     end
 end
