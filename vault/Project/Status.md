@@ -46,8 +46,10 @@ ADR-0004, `AGENTS.md`, CI, the move to MathStruct. Details in git.
 1. **Defaults for `inv`:** `LogTable16` inverts about 2.3 times faster at GF(2^16) and 1.9 times at
    GF(2^32), but its products have about twice the latency of `MulTable`. A separate default
    for `inv` (`default_inv_strategy`) would take both. Decide whether that API is wanted.
-2. **`c .* a` through `MulBy` automatically** for long arrays (2–11 times faster), at the price of
-   breaking broadcast fusion for that pattern. Decide whether wanted.
+2. **J8c — automatic `MulBy` for `c .* a`: start here next session** (maintainer, 2026-11-19:
+   "I kinda want all three"). Keep today's explicit behaviour as the baseline (C), benchmark the
+   eager rewrite (A) against it, and measure the length per field above which the lazy rewrite
+   (B) pays. Details in the Backlog. (Correction: B keeps broadcast fusion; only A breaks it.)
 3. **J8b** (Backlog): faster bitsliced packing, cache blocking for large matrices, bitsliced
    matrix products, GPU kernels.
 4. **FF-P1** (`Problems.md`): `CLMul` at GF(2^64) element by element; investigate on a quiet

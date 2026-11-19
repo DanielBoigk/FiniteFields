@@ -96,6 +96,25 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
 - **J6 — Constant time:** not a goal. Document which strategies happen to be constant-time; do not
   engineer for it.
+- **J8c — Automatic `MulBy` for `c .* a`** (maintainer, 2026-11-19: "I kinda want all three ...
+  figure out the threshold where B becomes viable"; for the next session). Three variants:
+  - **C, baseline (today):** `c .* a` uses the scalar `*` element by element; `MulBy(c)` is explicit
+    and can be reused across calls.
+  - **A, eager:** `broadcasted(::typeof(*), c::Nimber, a::AbstractArray)` (and `a .* c`) returns
+    `MulBy(c).(a)` at once. Faster products, but breaks fusion: `c .* a .+ b` gets a temporary and
+    an extra pass, `out .= c .* a` allocates and copies.
+  - **B, lazy:** the same hook returns `broadcasted(MulBy(c), a)`, so the fused loop calls the
+    table lookup and fusion stays. Costs: table set-up on every call (16 ns at GF(256) to 12 µs
+    at GF(2^128)), a hidden table allocation (up to 64 KiB), extra methods for `a .* c` and for a
+    lazy argument (`c .* (a .+ b)`). Below a length threshold it must use the scalar `*`; to stay
+    type-stable, one callable type holding `c` that builds tables only above the threshold.
+
+  Work: benchmark A and B against C per field (GF(256) … GF(2^128)) over array lengths
+  (e.g. 2^2 … 2^16), alone and in fused expressions (`c .* a .+ b`, `out .= c .* a`), counting
+  allocations; find each field's break-even length for B; tests that fused expressions still
+  allocate nothing and that short arrays are no slower. Then propose which variant (if any)
+  becomes the default. The break-even estimated from J8's measurements is 40–240 elements
+  (set-up cost over gain per product, `src/bulk.md`); an estimate, to be measured.
 - **J8b — Bulk, remaining** (after J8): faster packing of `BitslicedVector`s (bit-matrix
   transposes); bitsliced vectors above GF(2^32) and a bitsliced matrix product; cache blocking of
   the matrix products; ARM `PMULL`; GPU kernels (needs a GPU to test); whether `c .* a` should use

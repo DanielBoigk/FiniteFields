@@ -151,8 +151,11 @@ products of two arrays are in `nimber.md` and `nimber_fast.md` (GF(256) `MulTabl
 
 ## What it does not do
 
-- `c .* a` does not switch to `MulBy` by itself; doing so would break broadcast fusion. A
-  proposal for the maintainer.
+- `c .* a` does not switch to `MulBy` by itself. Two ways to do it: an eager `broadcasted` method
+  (A) returns `MulBy(c).(a)` at once, which breaks fusion (`c .* a .+ b` would allocate a
+  temporary); a lazy rewrite (B) returns `broadcasted(MulBy(c), a)` and keeps fusion, but pays the
+  table set-up on every call and needs a length threshold. Comparing both against today's
+  behaviour (C) is backlog item J8c.
 - No cache blocking in the matrix products: matrices are converted whole, and each entry streams
   a column of each. Sizes beyond the caches are not measured.
 - Packing and unpacking `BitslicedVector`s are simple bit loops (2–6 ns per element); a bit-matrix
