@@ -63,6 +63,10 @@ site/build.sh --serve
 The first build checks out the pinned Quartz revision into `site/.quartz/` and installs its
 locked npm dependencies. Generated files and the Quartz checkout are ignored by Git.
 
+On pushes to `main` that touch `vault/` or `site/`, the
+[publish workflow](.github/workflows/pages.yml) rebuilds the site and deploys it to the
+`gh-pages` branch.
+
 ## Project workflow
 
 1. Write user-visible behavior and acceptance criteria in `vault/Specifications/`.
