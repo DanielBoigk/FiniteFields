@@ -36,6 +36,7 @@ until the go: notes, plans, specifications, templates, tooling the maintainer as
     input from the store by that hash and evaluated the shells without the override.
 - **`lean/lake-manifest.json` is committed** (no longer git-ignored), written by `lake update`
   with Lean 4.36.0; it pins mathlib to `fc4f59e` (tag `v4.36.0`) and its dependencies.
+  `lake exe cache get` and `lake build` then succeeded (2372 jobs, the smoke test built in 12 s).
 - **CI:** `lean.yml` (runs `lake build` via `leanprover/lean-action@v1`) and `julia.yml` (tests
   every `julia/<Pkg>/`; skipped while there is none) run on pushes to `main` and on pull requests
   **only when their own paths change**. `full-ci.yml` runs both plus a Quartz build (no deploy) on
@@ -144,6 +145,10 @@ case by case is right.
 5. **Milestones** (deferred).
 
 ## Known issues
+
+- `lake build` warns that `lean/FiniteFields.lean` imports mathlib, which uses the Lean module
+  system, and suggests starting the file with `module`. Adopt the module system when the Lean
+  library is laid out (backlog L0).
 
 - Wikilinks use two styles (`[[Decisions/…]]` and `[[Project/Decisions/…]]`); pick by-name links
   when the vault is restructured (V0).
