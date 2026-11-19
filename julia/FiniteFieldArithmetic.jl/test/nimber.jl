@@ -138,6 +138,14 @@ end
     @test hash(GF16(7)) == hash(GF256(7))
 end
 
+@testset "equality with other numbers is false, never an error" begin
+    @test GF256(7) != 7
+    @test 7 != GF256(7)
+    @test GF256(1) != 1.0
+    @test GF256(7) in Any[7, GF256(7)]
+    @test length(Set(Any[GF256(1), 1, GF16(1)])) == 2   # GF16(1) == GF256(1)
+end
+
 @testset "random elements" begin
     @test rand(GF256) isa GF256
     v = rand(GF16, 1000)

@@ -45,7 +45,7 @@ jobs:
       fail-fast: false
       matrix:
         package: ${{ fromJSON(needs.discover.outputs.packages) }}
-        julia: ["1"]
+        julia: ["1", "min"]   # the current release and the oldest version in [compat]
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2

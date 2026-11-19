@@ -13,11 +13,10 @@ you too. Conventions are adapted from [Lenticulum.jl](https://github.com/MathStr
 2. [`vault/Project/Backlog.md`](vault/Project/Backlog.md) holds the planned work and the ledger
    of open `sorry`s.
 
-**The project is in the planning phase (since 2026-11-19).** Do not write library code (Julia or
-Lean beyond the existing smoke test) until the maintainer says implementation may start, and
-`Status.md` records it. Until then, work is limited to notes, plans, specifications, templates and
-tooling the maintainer asked for. An earlier agent implemented a Julia starter without that go;
-it was removed. Do not repeat that.
+**Implement only what the maintainer approved.** The project was planned before any code was
+written; implementation started on 2026-11-19 with the items `Status.md` names as approved. Ask
+before starting a backlog section the maintainer has not approved. (An earlier agent implemented
+a Julia starter without approval; it was removed.)
 
 **Claims need evidence.** A statement in a note is backed by a mathlib declaration, a Lean proof,
 a test, a benchmark, or a citation with an exact theorem number. Anything else is labelled a
@@ -32,7 +31,7 @@ conjecture or an expectation. When you find something wrong, fix it or record it
 | `vault/Project/` | `Status.md` (handoff), `Backlog.md`, `Problems.md`, `Decisions/` (ADRs) |
 | `vault/templates/` | note templates; start every new note from one |
 | `lean/` | Lean 4 + mathlib (`lean-toolchain` and the mathlib tag in `lakefile.lean` move together) |
-| `julia/` | Julia packages, one directory each (`julia/FiniteFieldArithmetic.jl/` first); does not exist yet |
+| `julia/` | Julia packages, one directory each; `julia/FiniteFieldArithmetic.jl/` (`src/`, `test/`, `bench/`, a note `x.md` beside each `src/x.jl`) |
 | `site/` | the Quartz build: `build.sh`, `quartz.config.ts`, `quartz.layout.ts` |
 | `flake.nix`, `flake.lock` | dev shells; see the README |
 | `.github/workflows/` | CI, see below |
@@ -86,7 +85,13 @@ conjecture or an expectation. When you find something wrong, fix it or record it
   sweep. **Every `sorry` gets a row in the Backlog's sorry ledger** (file, declaration, note) in
   the same change; the proofs come in a later sweep. Never leave an unlisted `sorry`.
 
-## Julia conventions (for when implementation starts)
+## Julia conventions
+
+Tests: `julia --project=julia/FiniteFieldArithmetic.jl -e 'using Pkg; Pkg.test()'` (no system
+Julia in the cloud container: prefix `nix develop .#julia -c`). Benchmarks:
+`julia --project=julia/FiniteFieldArithmetic.jl/bench julia/FiniteFieldArithmetic.jl/bench/run.jl`
+(instantiate the bench environment once; its Manifest is not tracked).
+
 
 - Orient on [Lenticulum.jl](https://github.com/MathStruct/Lenticulum.jl): one environment per
   package, `test/aqua.jl` closing every suite, a `bench/` environment, implementation notes

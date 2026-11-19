@@ -1,8 +1,8 @@
 #overview
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
-> that completes it. Everything below is a **proposal from the planning phase (2026-11-19)**:
-> nothing here is approved for implementation until `Status.md` says so.
+> that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
+> approves sections for implementation (so far: J0 and nimber GF(2^8)); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -47,11 +47,17 @@ comes first in every section.
 
 ## T — Tooling and site
 
-- **T1 — Snippet sync tool.** Generates mathlib callouts (signature, docstring, link, attribution)
-  and our own Lean/Julia snippets between markers in notes; fails on a missing declaration. See
-  `Status.md`, "Answers".
-- **T2 — Lean API docs with doc-gen4**, published under a subpath beside the vault; first check
-  whether it can be limited to our modules.
+- **T1 — Snippet sync tool.** Takes a declaration name, asks Lean (against the pinned mathlib)
+  for signature, docstring and module, and writes a `> [!mathlib]` callout between markers
+  (`%% mathlib: Name %%` … `%% /mathlib %%`) with a link to the mathlib docs and an attribution line
+  (mathlib is Apache-2.0). Plain Markdown, so Obsidian and Quartz both render it; a re-run refreshes
+  it; a renamed declaration fails loudly. The same tool syncs our own Lean and Julia snippets from
+  anchors in the sources. Caveat: the hosted mathlib docs follow `master`, not our pin. A Quartz
+  plugin would not render in Obsidian, hence the generator.
+- **T2 — Lean API docs with doc-gen4** (the tool behind mathlib's docs), published under a subpath
+  (e.g. `<site>/lean/`) beside the vault, as Lenticulum.jl publishes Documenter under `api/`;
+  Julia API docs (Documenter) likewise under `<site>/julia/`. First check whether doc-gen4 can be
+  limited to our modules: by default it documents every import, i.e. much of mathlib.
 - **T3 — Note checker** (Lenticulum's `check_notes.py` as model): dangling wikilinks, missing tag
   lines, missing sources, unlisted `sorry`s.
 - **T4 — CI, remaining:** a benchmark job (on demand, not per push) once `bench/` exists; a job
@@ -72,12 +78,9 @@ comes first in every section.
 
 ## J — Julia (`FiniteFieldArithmetic.jl`)
 
-- **J0 — Package skeleton, test first:** `test/` with Aqua.jl, JET.jl, DispatchDoctor.jl;
-  `bench/` environment with a benchmark suite; CI.
-- **J1 — Byte-sized $\mathbb{F}_{2^n}$ (priority):** $\mathbb{F}_2$, $\mathbb{F}_{2^8}$,
-  $\mathbb{F}_{2^{16}}$, $\mathbb{F}_{2^{32}}$, $\mathbb{F}_{2^{64}}$, $\mathbb{F}_{2^{128}}$, each
-  stored in the matching `UInt` (`Bool`/`UInt8` for $\mathbb{F}_2$, open); `+` as XOR; hex in
-  `print` and in the REPL.
+- **J1 — Byte-sized nimber fields above GF(256) (next):** $\mathbb{F}_{2^{16}}$ (`UInt16`) …
+  $\mathbb{F}_{2^{128}}$ (`UInt128`), recursing down to the GF(256) tables; tests by subfield
+  nesting, random axiom checks and the Fermat-power rules (exhaustive checks end at 8 bits).
 - **J1a — Representations:** nimbers for $n = 2^k$ (subfields nested as integers), Conway
   polynomials for every $n$ (pseudo-Conway beyond the tables), standard polynomials (AES, GHASH,
   ...) for cryptanalysis and interoperability; selected by a type parameter; conversion maps
@@ -99,9 +102,12 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
 - **J8 — Bulk and array operations** for learners: broadcasting, SIMD/bitsliced bulk
   multiplication, matrix products over $\mathbb{F}_{2^n}$, random sampling; GPU-compatible element
   types. Benchmarked like single-element arithmetic.
-- **J7 — $\overline{\mathbb{F}}_2$:** elements tagged with their degree, operations embed into
+- **J7 — $\overline{\mathbb{F}}_2$ ("$n = \infty$"):** every element lives in some finite
+  $\mathbb{F}_{2^n}$, so elements carry their degree and an operation embeds both operands into
   $\mathbb{F}_{2^{\operatorname{lcm}(m,n)}}$ through Conway polynomials (pseudo-Conway beyond the
-  tables). After J1–J3. Lean counterpart: `AlgebraicClosure (ZMod 2)`.
+  tables). Exact, not fast; sizes grow with the lcm. The nimber quadratic closure (all
+  $2^{2^k}$) is the cheap special case. After J1–J3. Lean counterpart:
+  `AlgebraicClosure (ZMod 2)`.
 
 ## Sorry ledger
 
@@ -112,6 +118,10 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
 
 ## Done
 
+- **J0 — `FiniteFieldArithmetic.jl` skeleton** (2026-11-19): tests first, Aqua, JET, DispatchDoctor,
+  `bench/` suite and profile script, implementation notes; CI tests Julia `1` and `min`.
+- **J1 (part) — nimber GF(2), GF(4), GF(16), GF(256)** (2026-11-19): strategies `Recursive`,
+  `MulTable` (default), `LogTable`; measurements in `src/nimber.md`.
 - **T4a — CI** (2026-11-19): path-filtered `lean.yml` and `julia.yml`, and `full-ci.yml` (all
   components plus a Quartz build) on the `full-ci` branch. Not yet run on GitHub.
 - **T6 — Move to MathStruct** (2026-11-19): repository transferred by the maintainer; `baseUrl`
