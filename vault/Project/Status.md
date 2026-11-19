@@ -77,8 +77,9 @@ MathStruct. Details in git.
 1. **Learners on finite fields:** when you are ready, write the ideas down (a research-question
    note in `vault/Research Questions/`), so the arithmetic API can be checked against them.
 2. **GitHub Pages:** check that the repository's Pages setting serves the `gh-pages` branch.
-3. **`main`:** `dev-danielb` holds everything since 2026-11-19; merge it into `main` when you
-   want the site deployed (`pages.yml` deploys from `main`).
+3. **`main`:** merged on 2026-11-19 at the maintainer's request (fast-forward to `40cd1c2`, J2a).
+   That push should run `julia.yml`, `lean.yml` and `pages.yml`; their results could not be
+   read from the session (no GitHub API access), so check the Actions tab and the site.
 4. **Milestones** (deferred).
 
 ## Known issues
