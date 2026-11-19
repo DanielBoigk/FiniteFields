@@ -9,11 +9,11 @@
 
 using BenchmarkTools, Random
 using FiniteFieldArithmetic
-using FiniteFieldArithmetic: mul, inverse, Recursive, MulTable, LogTable, bits
+using FiniteFieldArithmetic: mul, inverse, Recursive, MulTable, LogTable, LogTable16, CLMul, bits
 
 const N = 2^16              # elements per array for GF(256)
 const N_LARGE = 2^12        # for GF(2^16) … GF(2^128), where Recursive is slow
-const STRATEGIES = (Recursive(), MulTable(), LogTable())
+const STRATEGIES = (Recursive(), MulTable(), LogTable(), LogTable16(), CLMul())
 const LARGE = (("GF2_16", GF2_16), ("GF2_32", GF2_32), ("GF2_64", GF2_64), ("GF2_128", GF2_128))
 
 # Elements per array (or chain steps) of each group, for reporting per element.

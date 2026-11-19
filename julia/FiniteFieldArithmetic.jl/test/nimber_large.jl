@@ -11,12 +11,12 @@
 # - inverses exhaustively on GF(2^16), on random elements above.
 
 using FiniteFieldArithmetic
-using FiniteFieldArithmetic: bits, mul, inverse, Recursive, MulTable, LogTable
+using FiniteFieldArithmetic: bits, mul, inverse, Recursive, MulTable, LogTable, LogTable16, CLMul
 using Random, Test
 
 const LARGE = ((GF2_16, UInt16, 16), (GF2_32, UInt32, 32), (GF2_64, UInt64, 64),
                (GF2_128, UInt128, 128))
-const ALL_STRATEGIES = (Recursive(), MulTable(), LogTable())
+const ALL_STRATEGIES = (Recursive(), MulTable(), LogTable(), LogTable16(), CLMul())
 rng = Xoshiro(20261119)
 
 # x^(2^k) by k squarings (independent of `^`).
@@ -81,10 +81,14 @@ end
         r = mul(Recursive(), a, b)
         @test mul(MulTable(), a, b) == r
         @test mul(LogTable(), a, b) == r
+        @test mul(LogTable16(), a, b) == r
+        @test mul(CLMul(), a, b) == r
         if !iszero(a)
             s = inverse(Recursive(), a)
             @test inverse(MulTable(), a) == s
             @test inverse(LogTable(), a) == s
+            @test inverse(LogTable16(), a) == s
+            @test inverse(CLMul(), a) == s
         end
     end
 end

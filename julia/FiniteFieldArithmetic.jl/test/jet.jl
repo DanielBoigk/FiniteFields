@@ -2,13 +2,13 @@
 # dispatch in the arithmetic hot paths. (DispatchDoctor's `@stable` in the source additionally
 # throws on any type-unstable call to an arithmetic method; the test suite exercises them all.)
 using FiniteFieldArithmetic
-using FiniteFieldArithmetic: mul, inverse, Recursive, MulTable, LogTable
+using FiniteFieldArithmetic: mul, inverse, Recursive, MulTable, LogTable, LogTable16, CLMul
 using JET, Test
 
 @testset "JET" begin
     JET.test_package(FiniteFieldArithmetic; target_modules = (FiniteFieldArithmetic,))
     a, b = GF256(0x53), GF256(0xca)
-    for s in (Recursive(), MulTable(), LogTable())
+    for s in (Recursive(), MulTable(), LogTable(), LogTable16(), CLMul())
         @test_opt mul(s, a, b)
         @test_opt inverse(s, a)
     end
@@ -19,7 +19,7 @@ using JET, Test
     @test_opt GF16(3) * GF256(5)
     for F in (GF2_16, GF2_32, GF2_64, GF2_128)
         x, y = F(0x53), F(0xca)
-        for s in (Recursive(), MulTable(), LogTable())
+        for s in (Recursive(), MulTable(), LogTable(), LogTable16(), CLMul())
             @test_opt mul(s, x, y)
             @test_opt inverse(s, x)
         end

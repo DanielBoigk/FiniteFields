@@ -5,7 +5,7 @@ using Profile
 include(joinpath(@__DIR__, "benchmarks.jl"))
 
 rng = Xoshiro(1)
-for (F, n, reps) in ((GF256, N, 2000), (GF2_128, N_LARGE, 500))
+for (F, n, reps) in ((GF256, N, 2000), (GF2_128, N_LARGE, 500))  # all STRATEGIES, incl. J2a
     a, b = rand(rng, F, n), rand(rng, F, n)
     c = similar(a)
     for s in STRATEGIES
