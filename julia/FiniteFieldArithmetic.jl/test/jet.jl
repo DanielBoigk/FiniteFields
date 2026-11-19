@@ -17,4 +17,12 @@ using JET, Test
     @test_opt a / b
     @test_opt a^7
     @test_opt GF16(3) * GF256(5)
+    for F in (GF2_16, GF2_32, GF2_64, GF2_128)
+        x, y = F(0x53), F(0xca)
+        for s in (Recursive(), MulTable(), LogTable())
+            @test_opt mul(s, x, y)
+            @test_opt inverse(s, x)
+        end
+        @test_opt x^7
+    end
 end
