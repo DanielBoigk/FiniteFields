@@ -247,11 +247,17 @@ function find_root(::Type{F}, exps) where {F <: Nimber}
     return bits(g[1])                            # g = X + g0, root g0 (characteristic 2)
 end
 
-# Byte tables of the linear map with images `img[k + 1]` of the unit vectors e_k.
-function byte_tables(img::Vector{T}) where {T <: Unsigned}
-    tab = zeros(T, 256, sizeof(T))
-    for j in 0:(sizeof(T) - 1), b in 0:255, k in 0:7
-        isodd(b >> k) && (tab[b + 1, j + 1] ⊻= img[8j + k + 1])
+# Byte tables of the linear map with images `img[k + 1]` of the unit vectors e_k:
+# tab[b + 1, j + 1] is the image of the byte b in position j. Each entry is one XOR away from
+# the entry of b with its lowest set bit cleared, so a table costs 255 XORs per byte position.
+byte_tables(img::AbstractVector{T}) where {T <: Unsigned} =
+    byte_tables!(Matrix{T}(undef, 256, sizeof(T)), img)
+function byte_tables!(tab::Matrix{T}, img::AbstractVector{T}) where {T <: Unsigned}
+    @inbounds for j in 0:(sizeof(T) - 1)
+        tab[1, j + 1] = zero(T)
+        for b in 1:255
+            tab[b + 1, j + 1] = tab[(b & (b - 1)) + 1, j + 1] ⊻ img[8j + trailing_zeros(b) + 1]
+        end
     end
     return tab
 end

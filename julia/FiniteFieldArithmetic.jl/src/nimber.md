@@ -118,7 +118,8 @@ below, as the recursion predicts (three half-size products plus the constant pro
 - Carry-less multiplication in a polynomial basis is in `src/nimber_fast.md` (J2a). The expectation
   recorded here before, "much slower than CLMUL", held only partly: with a change of basis per
   product, GF(2^128) is about 1.5 times faster, and GF(2^64) shows no consistent gain.
-- No bitsliced or SIMD bulk multiplication yet (J8); `Recursive` is scalar.
+- Bulk operations (bitsliced vectors, matrix products, multiplication by a constant) are in
+  `src/bulk.md` (J8); `Recursive` itself is scalar.
 - Tables are not constant time (not a goal, J6).
 - No conversion to Conway or polynomial-basis representations yet (J1a).
 

@@ -130,7 +130,8 @@ loads and XORs) rather than by the cache; an inference, not profiled.
 
 **What this means for bulk work (J8):** data kept in the polynomial basis costs only
 `poly_mulmod` per product: 4.2 ns at GF(2^128) and 2.3 ns at GF(2^64), against 46 and 20 ns with
-conversions. Converting once per array, not once per product, is the obvious next step there.
+conversions. Converting once per array, not once per product, is the obvious next step there. Done for
+matrix products in J8 (`src/bulk.md`, `CLMulMatMul`: 3.5 ns per multiply-add at GF(2^128)).
 
 ## What it does not do
 

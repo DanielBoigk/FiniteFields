@@ -10,19 +10,26 @@ Multiplication strategies ([`MulStrategy`](@ref): [`Recursive`](@ref), [`MulTabl
 [`LogTable`](@ref), [`LogTable16`](@ref), [`CLMul`](@ref)) are reached through [`mul`](@ref) and
 [`inverse`](@ref); `*` and `inv` use [`default_strategy`](@ref).
 
+Bulk operations (`src/bulk.md`): fast `rand!` for arrays, [`MulBy`](@ref) (multiplication by a
+constant), matrix products ([`matmul!`](@ref) with a [`MatMulStrategy`](@ref); `*` and
+`LinearAlgebra.mul!` use [`default_matmul_strategy`](@ref)), and [`BitslicedVector`](@ref).
+
 Type stability of the arithmetic is enforced by DispatchDoctor's `@stable` (mode `"error"`); set
 the preference `instability_check = "disable"` for this package to switch the checks off.
 """
 module FiniteFieldArithmetic
 
 using DispatchDoctor: @stable
+using LinearAlgebra: LinearAlgebra
 using Random: Random
 
 export BinaryFieldElement, Nimber, GF2, GF4, GF16, GF256, GF2_16, GF2_32, GF2_64, GF2_128
 export characteristic, degree, elements
+export MulBy, BitslicedVector
 
 include("binaryfield.jl")
 include("nimber.jl")
 include("nimber_fast.jl")
+include("bulk.jl")
 
 end

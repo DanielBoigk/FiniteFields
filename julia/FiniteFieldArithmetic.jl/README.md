@@ -16,12 +16,22 @@ GF16(0xb)                        # 0xb ∈ GF(2^4): the field is named when it d
 GF16(3) * GF256(0x10)            # GF(16) embeds into GF(256) with the same bits
 GF2_128(0xdeadbeef) * GF2_64(2)  # mixed levels promote to the larger field
 rand(GF256, 4)
+
+A, B = rand(GF2_128, 64, 64), rand(GF2_128, 64, 64)
+A * B                            # matrix product, one reduction per entry (CLMulMatMul)
+m = MulBy(GF2_64(0xabc)); m.(rand(GF2_64, 1000))   # multiplication by a fixed constant
+v = BitslicedVector(rand(GF256, 1000)); v .* v      # bitsliced element-wise product
 ```
 
 Multiplication strategies (`Recursive`, `MulTable`, `LogTable`, `LogTable16`, `CLMul`) are
 available through `FiniteFieldArithmetic.mul(strategy, a, b)` and `inverse(strategy, a)`; `*`
 uses the fastest measured one (`src/nimber.md`, `src/nimber_fast.md`): `CLMul` (carry-less
 multiplication in a polynomial basis, x86 `PCLMULQDQ`) for GF(2^128), `MulTable` below.
+
+Bulk operations (`src/bulk.md`): `rand!` for arrays, broadcasting, `MulBy(c)` (multiplication by
+a constant as byte tables), matrix products (`*`, `LinearAlgebra.mul!`, or
+`FiniteFieldArithmetic.matmul!` with `ScalarMatMul`, `TableMatMul`, `CLMulMatMul`), and
+`BitslicedVector` up to GF(2^32).
 
 ## Development
 
@@ -31,4 +41,5 @@ julia --project=bench -e 'using Pkg; Pkg.instantiate()'              # once
 julia --project=bench bench/run.jl                                   # benchmarks
 julia --project=bench bench/profile_nimber.jl                        # profile
 julia --project=bench bench/clmul_parts.jl                           # CLMul cost breakdown
+julia --project=bench bench/rand_compare.jl                          # bulk vs per-element rand
 ```

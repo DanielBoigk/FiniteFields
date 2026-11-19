@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J2a); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J2a, J8); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -96,9 +96,10 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
 - **J6 — Constant time:** not a goal. Document which strategies happen to be constant-time; do not
   engineer for it.
-- **J8 — Bulk and array operations** for learners: broadcasting, SIMD/bitsliced bulk
-  multiplication, matrix products over $\mathbb{F}_{2^n}$, random sampling; GPU-compatible element
-  types. Benchmarked like single-element arithmetic.
+- **J8b — Bulk, remaining** (after J8): faster packing of `BitslicedVector`s (bit-matrix
+  transposes); bitsliced vectors above GF(2^32) and a bitsliced matrix product; cache blocking of
+  the matrix products; ARM `PMULL`; GPU kernels (needs a GPU to test); whether `c .* a` should use
+  `MulBy` by itself.
 - **J7 — $\overline{\mathbb{F}}_2$ ("$n = \infty$"):** every element lives in some finite
   $\mathbb{F}_{2^n}$, so elements carry their degree and an operation embeds both operands into
   $\mathbb{F}_{2^{\operatorname{lcm}(m,n)}}$ through Conway polynomials (pseudo-Conway beyond the
@@ -124,6 +125,12 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   the recursion base) and `CLMul` (polynomial basis with `PCLMULQDQ`, change of basis by byte
   tables); `CLMul` is the default for GF(2^128) (about 1.5 times faster than `MulTable`); details
   and measurements in `src/nimber_fast.md`, open question FF-P1.
+- **J8 — Bulk and array operations** (2026-11-19): fast `rand!` for arrays, broadcasting (tested,
+  no code needed), `MulBy` (multiplication by a constant as byte tables), matrix products
+  (`ScalarMatMul`, `TableMatMul`, `CLMulMatMul` with one reduction per entry; default
+  `CLMulMatMul` from GF(2^16), 3.5 ns per multiply-add at GF(2^128) against 79), `*` and
+  `LinearAlgebra.mul!`, `BitslicedVector` up to GF(2^32); `isbits` element types, GPU not tested.
+  Details and measurements in `src/bulk.md`.
 - **T4a — CI** (2026-11-19): path-filtered `lean.yml` and `julia.yml`, and `full-ci.yml` (all
   components plus a Quartz build) on the `full-ci` branch. Not yet run on GitHub.
 - **T6 — Move to MathStruct** (2026-11-19): repository transferred by the maintainer; `baseUrl`

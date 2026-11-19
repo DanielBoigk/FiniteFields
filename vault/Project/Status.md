@@ -10,46 +10,51 @@
 ## Stage
 
 Implementation of approved items. Approved and done so far: J0, the nimber fields GF(2) …
-GF(2^128), and J2a (maintainer, 2026-11-19: "Implement J2a"). Ask before starting a backlog
-section the maintainer has not approved.
+GF(2^128), J2a, and J8 (maintainer, 2026-11-19: "please implement J8!"). Ask before starting a
+backlog section the maintainer has not approved.
 
 ## Done last
 
-- **J2a — faster large nimber levels** (`src/nimber_fast.jl`, note `src/nimber_fast.md`), tests and
-  benchmarks first. Two new strategies:
-  - `LogTable16`: the recursion stops at GF(2^16), with log/exp tables (384 KiB).
-  - `CLMul`: a polynomial basis GF(2)[x]/(f) for sparse irreducible f (GHASH polynomial at 128
-    bits), reached through a change of basis (byte tables). The root of f in the nimber field is
-    found at precompile time (Cantor–Zassenhaus). The product uses x86 `PCLMULQDQ` through an LLVM
-    intrinsic and is used at GF(2^64) and GF(2^128). Without the instruction (ARM, very old x86) it
-    computes as `MulTable`.
-- **Default changed:** `default_strategy(GF2_128) = CLMul()`. In throughput it measured 46–53 ns
-  per product against 77–80 ns for `MulTable` (latency 51–55 against 72–74), in every run. The
-  other levels keep `MulTable`.
-- **Verified:** `Pkg.test()` passes, 728,712 checks, Julia 1.13.1, x86_64-linux with `PCLMULQDQ`.
-  The tests also exercise the path without the instruction by switching the flag off. Aqua and
-  JET pass.
-- **Not verified:** Julia 1.10 (`min` in CI); ARM; an x86 CPU without `PCLMULQDQ`; CI as a whole
-  (not pushed to `full-ci` from this session).
-- **Benchmark noise:** this VM varies by up to about 40% between runs; `src/nimber_fast.md` gives
-  ranges over several runs.
+- **J8 — bulk and array operations** (`src/bulk.jl`, note `src/bulk.md`), tests and benchmarks
+  first:
+  - `rand!`/`rand(F, dims)` fill arrays in one call on the storage type: 5–55 times faster than
+    per element. Uniform, but different values than before for the same seed.
+  - Broadcasting needed no code; tested to fuse without allocations.
+  - `MulBy(c)`: multiplication by a constant as byte tables (it is $\mathbb{F}_2$-linear);
+    2–11 times faster than `c .* a`, set-up worth 40–240 products.
+  - Matrix products: `matmul!(strategy, C, A, B)` with `ScalarMatMul(s)`, `TableMatMul()`,
+    `CLMulMatMul()`; `*` and `LinearAlgebra.mul!(C, A, B, α, β)` for strided matrices and vectors.
+    `CLMulMatMul` (polynomial basis, unreduced products summed, one reduction per entry) is the
+    default from GF(2^16): per multiply-add 0.39 / 0.44 / 0.79 / 3.5 ns at GF(2^16) … GF(2^128),
+    against 2.5 / 8.1 / 23 / 79 ns for scalar loops. GF(256) uses `TableMatMul` (0.76 ns).
+  - `BitslicedVector` (GF(2) … GF(2^32)): the nimber recursion as an AND/XOR circuit on planes,
+    four 64-bit words per SIMD vector; products 4–8 times faster than broadcasting, but packing
+    costs 2–6 ns per element.
+  - New dependency: `LinearAlgebra` (stdlib).
+- **Verified:** `Pkg.test()` passes, 730,160 checks, Julia 1.13.1, x86_64-linux with `PCLMULQDQ`,
+  Aqua and JET included. `CLMulMatMul` is also tested with the instruction switched off.
+- **Not verified:** Julia 1.10 (`min` in CI); ARM; a CPU without `PCLMULQDQ` (only simulated by the
+  flag); any GPU (the claim "Recursive should work in GPU kernels" is an expectation); CI as a
+  whole (not pushed to `full-ci`). Benchmarks are a single run on a noisy VM; the decisions rest
+  on differences of 6× and more.
 
-Earlier: nimber GF(2) … GF(2^128) (`Nimber{0..7}`), ADR-0004, `AGENTS.md`, CI, the move to
-MathStruct. Details in git.
+Earlier: J2a (`LogTable16`, `CLMul`, default `CLMul` at GF(2^128)), nimber GF(2) … GF(2^128),
+ADR-0004, `AGENTS.md`, CI, the move to MathStruct. Details in git.
 
 ## Next (proposals, need the maintainer's go)
 
 1. **Defaults for `inv`:** `LogTable16` inverts about 2.3 times faster at GF(2^16) and 1.9 times at
    GF(2^32), but its products have about twice the latency of `MulTable`. A separate default
    for `inv` (`default_inv_strategy`) would take both. Decide whether that API is wanted.
-2. **FF-P1** (`Problems.md`): `CLMul` at GF(2^64) is about 1.8 times faster than `MulTable` on bare
-   bit patterns but not consistently so as `GF2_64` elements. Investigate on a quiet machine, then
-   reconsider the GF(2^64) default.
-3. **J8 — bulk multiplication.** With data kept in the polynomial basis, a GF(2^128) product
-   costs 4.2 ns instead of about 46. Converting once per array is the obvious bulk path, and it
-   is also the route to SIMD/GPU.
-4. **ARM `PMULL`** for `CLMul` (needs an ARM machine to test).
-5. **J1a/J1b** — Conway representation and arbitrary $n$ (e.g. GF(2^7)).
+2. **`c .* a` through `MulBy` automatically** for long arrays (2–11 times faster), at the price of
+   breaking broadcast fusion for that pattern. Decide whether wanted.
+3. **J8b** (Backlog): faster bitsliced packing, cache blocking for large matrices, bitsliced
+   matrix products, GPU kernels.
+4. **FF-P1** (`Problems.md`): `CLMul` at GF(2^64) element by element; investigate on a quiet
+   machine. (Matrix products at GF(2^64) no longer depend on it.)
+5. **ARM `PMULL`** for `CLMul` and `CLMulMatMul` (needs an ARM machine to test).
+6. **J1a/J1b** — Conway representation and arbitrary $n$ (e.g. GF(2^7)); J3 (inversion), and
+   linear algebra on top of the matrix products (rank, solving; V5).
 
 ## Decisions in force (maintainer, 2026-11-19)
 
