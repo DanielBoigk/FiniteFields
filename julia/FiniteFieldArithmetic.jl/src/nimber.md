@@ -61,8 +61,8 @@ $a^{-1} = (a_1 N^{-1})\,F + (a_0 \oplus a_1) N^{-1}$.
   to the storage type of the level below (`halftype`: `UInt128` → `UInt64` → … → `UInt8`).
   Tables are computed with `Recursive` at precompile time; because the subfields are nested, the
   GF(256) tables serve every level up to GF(256) directly and are the base of the larger ones.
-- `*` and `inv` use `default_strategy(N) = MulTable()` at every level, chosen from the
-  measurements below.
+- `*` and `inv` use `default_strategy(N) = MulTable()` up to GF(2^64), chosen from the
+  measurements below; GF(2^128) uses `CLMul` since J2a (`src/nimber_fast.md`).
 - Powers reduce the exponent modulo $2^n - 1$ in the storage type (also for `UInt128`, and for
   `BigInt` exponents), see `binaryfield.md`.
 - Mixed levels promote to the larger one (`promote_rule`); conversion to a smaller level checks
@@ -106,7 +106,8 @@ below, as the recursion predicts (three half-size products plus the constant pro
   products); the rest is spread evenly over the three half-size products and the constant
   product, i.e. splitting and recombining the halves. A real speed-up needs fewer levels (larger
   base tables, e.g. GF(2^16) log tables of 128 KiB each) or a different algorithm (carry-less
-  multiplication in a polynomial basis behind a change of basis); backlog J2.
+  multiplication in a polynomial basis behind a change of basis); both done in J2a, see
+  `src/nimber_fast.md`.
 - The constant-product recursion $H_k$ replaced a general product at no measurable change in
   GF(256) (14.0 ns before, 13.4–13.5 ns after, within the run-to-run spread). DispatchDoctor costs
   nothing measurable (the same function without `@stable`: 11.3 vs 11.0 ns, a separate run).
@@ -114,9 +115,9 @@ below, as the recursion predicts (three half-size products plus the constant pro
 ## What it does not do
 
 - Levels above 7 (GF(2^256) and up): no storage type; they would need a two-word type.
-- GF(2^64) and GF(2^128) are expected to be much slower than carry-less multiplication (CLMUL)
-  in a polynomial basis, which needs one or a few hardware multiplications plus a reduction; an
-  expectation, not measured here (J2).
+- Carry-less multiplication in a polynomial basis is in `src/nimber_fast.md` (J2a). The expectation
+  recorded here before, "much slower than CLMUL", held only partly: with a change of basis per
+  product, GF(2^128) is about 1.5 times faster, and GF(2^64) shows no consistent gain.
 - No bitsliced or SIMD bulk multiplication yet (J8); `Recursive` is scalar.
 - Tables are not constant time (not a goal, J6).
 - No conversion to Conway or polynomial-basis representations yet (J1a).

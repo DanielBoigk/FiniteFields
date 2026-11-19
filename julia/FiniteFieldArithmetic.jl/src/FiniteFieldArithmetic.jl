@@ -7,8 +7,8 @@ Arithmetic in finite fields, characteristic 2 first. Implemented so far: the nim
 [`GF2_32`](@ref), [`GF2_64`](@ref), [`GF2_128`](@ref)), nested as integers.
 
 Multiplication strategies ([`MulStrategy`](@ref): [`Recursive`](@ref), [`MulTable`](@ref),
-[`LogTable`](@ref)) are reached through [`mul`](@ref) and [`inverse`](@ref); `*` and `inv` use
-[`default_strategy`](@ref).
+[`LogTable`](@ref), [`LogTable16`](@ref), [`CLMul`](@ref)) are reached through [`mul`](@ref) and
+[`inverse`](@ref); `*` and `inv` use [`default_strategy`](@ref).
 
 Type stability of the arithmetic is enforced by DispatchDoctor's `@stable` (mode `"error"`); set
 the preference `instability_check = "disable"` for this package to switch the checks off.
@@ -23,5 +23,6 @@ export characteristic, degree, elements
 
 include("binaryfield.jl")
 include("nimber.jl")
+include("nimber_fast.jl")
 
 end

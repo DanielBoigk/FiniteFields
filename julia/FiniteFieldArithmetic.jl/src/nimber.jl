@@ -147,9 +147,12 @@ level(::Val{K}) where {K} = K
     default_strategy(F)
 
 The strategy behind `*` and `inv` for `F`, chosen by the benchmarks in `bench/`
-(`src/nimber.md`, "Measurements").
+(`src/nimber.md` and `src/nimber_fast.md`, "Measurements"): [`CLMul`](@ref) for GF(2^128) (it
+computes as [`MulTable`](@ref) on CPUs without `PCLMULQDQ`), [`MulTable`](@ref) for the other
+levels.
 """
 default_strategy(::Type{<:Nimber}) = MulTable()
+default_strategy(::Type{GF2_128}) = CLMul()
 
 # --- The recursion, shared by all strategies --------------------------------------------------
 #

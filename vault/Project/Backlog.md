@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0 and nimber GF(2^8)); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J2a); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -87,9 +87,6 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
   constructs $\mathbb{F}_{2^n}$ for any $n$: picks the smallest fitting `UInt` for $n \le 128$,
   multi-word storage above; finds an irreducible polynomial (low-weight trinomial or pentanomial
   search with an irreducibility test) or takes a Conway polynomial from a table.
-- **J2a — Faster large nimber levels:** GF(2^16) log/exp tables as the recursion base, and/or
-  carry-less multiplication in a polynomial basis behind a change of basis; compare with
-  `MulTable` (GF(2^128): 73 ns per product, `src/nimber.md`).
 - **J2 — Multiplication strategies**, selected by dispatch and compared by benchmark; both table
   and computed variants where possible (maintainer, 2026-11-19), small fields probably tables
   only: shift-and-add, log/antilog tables (small $n$), carry-less multiplication (x86 `PCLMULQDQ`, ARM `PMULL` via LLVM
@@ -123,6 +120,10 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
 - **J1 — nimber fields GF(2) … GF(2^128)** (2026-11-19): `Nimber{0..7}` in the smallest fitting
   `UInt`; strategies `Recursive`, `MulTable` (default), `LogTable` sharing one recursion;
   measurements in `src/nimber.md`.
+- **J2a — faster large nimber levels** (2026-11-19): `LogTable16` (GF(2^16) log/exp tables as
+  the recursion base) and `CLMul` (polynomial basis with `PCLMULQDQ`, change of basis by byte
+  tables); `CLMul` is the default for GF(2^128) (about 1.5 times faster than `MulTable`); details
+  and measurements in `src/nimber_fast.md`, open question FF-P1.
 - **T4a — CI** (2026-11-19): path-filtered `lean.yml` and `julia.yml`, and `full-ci.yml` (all
   components plus a Quartz build) on the `full-ci` branch. Not yet run on GitHub.
 - **T6 — Move to MathStruct** (2026-11-19): repository transferred by the maintainer; `baseUrl`

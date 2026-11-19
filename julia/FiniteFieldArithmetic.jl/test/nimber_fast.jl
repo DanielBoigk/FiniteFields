@@ -136,6 +136,20 @@ end
     end
 end
 
+@testset "without PCLMULQDQ" begin
+    hw = FiniteFieldArithmetic.PCLMUL[]
+    try
+        FiniteFieldArithmetic.PCLMUL[] = false
+        for (F, T, n) in POLY_LEVELS, _ in 1:1000
+            a, b = rand(rng, F), rand(rng, F)
+            @test mul(CLMul(), a, b) == mul(Recursive(), a, b)              # MulTable path
+            @test poly_mulmod(bits(a), bits(b)) == ref_mulmod(bits(a), bits(b), modulus_big(T))
+        end
+    finally
+        FiniteFieldArithmetic.PCLMUL[] = hw
+    end
+end
+
 @testset "type stability" begin
     for (F, T, n) in POLY_LEVELS, s in FAST
         a, b = rand(rng, F), rand(rng, F) + one(F)

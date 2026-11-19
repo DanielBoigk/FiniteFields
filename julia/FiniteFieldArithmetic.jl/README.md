@@ -18,9 +18,10 @@ GF2_128(0xdeadbeef) * GF2_64(2)  # mixed levels promote to the larger field
 rand(GF256, 4)
 ```
 
-Multiplication strategies (`Recursive`, `MulTable`, `LogTable`) are available through
-`FiniteFieldArithmetic.mul(strategy, a, b)` and `inverse(strategy, a)`; `*` uses the fastest
-measured one (`src/nimber.md`).
+Multiplication strategies (`Recursive`, `MulTable`, `LogTable`, `LogTable16`, `CLMul`) are
+available through `FiniteFieldArithmetic.mul(strategy, a, b)` and `inverse(strategy, a)`; `*`
+uses the fastest measured one (`src/nimber.md`, `src/nimber_fast.md`): `CLMul` (carry-less
+multiplication in a polynomial basis, x86 `PCLMULQDQ`) for GF(2^128), `MulTable` below.
 
 ## Development
 
@@ -29,4 +30,5 @@ julia --project=. -e 'using Pkg; Pkg.test()'                         # tests, Aq
 julia --project=bench -e 'using Pkg; Pkg.instantiate()'              # once
 julia --project=bench bench/run.jl                                   # benchmarks
 julia --project=bench bench/profile_nimber.jl                        # profile
+julia --project=bench bench/clmul_parts.jl                           # CLMul cost breakdown
 ```
