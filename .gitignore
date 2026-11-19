@@ -1,0 +1,14 @@
+# Nix
+/result
+
+# Julia
+/julia/**/Manifest.toml
+
+# Lean
+/lean/.lake/
+/lean/lake-manifest.json
+
+# Quartz checkout and generated site
+/site/.quartz/
+/site/public/
+/site/.tikz-cache/
