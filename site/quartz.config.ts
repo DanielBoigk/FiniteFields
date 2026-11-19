@@ -2,6 +2,6 @@ import { siteConfig } from "./mathstruct/config"
 
 export default siteConfig({
   pageTitle: "FiniteFields",
-  baseUrl: "example.org/finitefields",
+  baseUrl: "mathstruct.org/FiniteFields",
   math: ["typst", "katex"],
 })

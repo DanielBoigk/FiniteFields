@@ -101,7 +101,11 @@ conjecture or an expectation. When you find something wrong, fix it or record it
 - **No integers wider than necessary.** Element storage uses the smallest unsigned type that
   fits (`UInt8` for $\mathbb{F}_{2^8}$, ...). Offer several arithmetic strategies where they
   trade off (tables, carry-less multiplication, ...), selected by dispatch.
-- **Characteristic-2 elements print in hexadecimal**, both with `print` and in the REPL (`show`).
+- **Characteristic-2 elements print in hexadecimal**, never binary, both with `print` and in the REPL
+  (`show`); when the field does not fill its storage (e.g. $\mathbb{F}_{2^7}$ in a `UInt8`), `show`
+  also names the field.
+- **Representations:** nimbers are the default for $\mathbb{F}_{2^{2^k}}$, Conway polynomials
+  secondary (and the default for other $n$), cryptographic polynomials (AES, GHASH) alternatives.
 - The first package is **`FiniteFieldArithmetic.jl`**: the basic field operations.
 
 ## CI

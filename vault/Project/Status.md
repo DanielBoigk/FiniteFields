@@ -107,8 +107,8 @@ under `Mathlib/Algebra/Category/`; if needed it is a full subcategory of `CommRi
 - **`lake-manifest.json`:** commit it (done).
 - **CI:** yes, path-filtered, with a branch that runs the full suite (done: `full-ci`).
 - **mathlib upstreaming:** decide case by case when it comes up.
-- **Site address:** leaning towards `mathstruct.org/FiniteFields` over
-  `danielboigk.github.io/FiniteFields`; not final (open question 4).
+- **Site address:** `mathstruct.org/FiniteFields`; the repository now lives at
+  `MathStruct/FiniteFields` (transferred by the maintainer, 2026-11-19).
 
 ## Answers to the follow-up questions (2026-11-19)
 
@@ -172,37 +172,34 @@ structure; the cryptographers' polynomials buy none (they are chosen for sparse 
    carry-less multiplication of a polynomial basis is, so the 64- and 128-bit levels need
    benchmarking against it.
 
-**Proposal (needs the maintainer's yes):** nimber representation as the default for
+**Accepted by the maintainer (2026-11-19):** nimber representation as the default for
 $n = 2^k$; Conway (pseudo-Conway beyond the tables) as the default for every other $n$, and for
 $\overline{\mathbb{F}}_2$ (J7); the standard polynomials (AES, GHASH, ...) as alternative
 representations for cryptanalysis and interoperability. Changing representation is an
 $\mathbb{F}_2$-linear map (an $n \times n$ bit matrix), cheap in bulk.
 
-**Printing:** `0x1b` when the field fills its storage; something else when it does not (e.g.
-$\mathbb{F}_{2^7}$ in a `UInt8`). Which form is open question 1.
+**Printing (decided):** always hexadecimal, never binary (too long). `print` gives `0x1b`. When the
+field does not fill its storage (e.g. $\mathbb{F}_{2^7}$ in a `UInt8`), the REPL (`show`) adds the
+field to the hex value, e.g. `0x1b` with `GF(2^7)`; the exact `show` format is fixed with the
+tests in J1.
 
-**Moving to MathStruct and registering.** Moving the repository is a GitHub transfer that only
-the maintainer can do (Settings → Transfer, into `MathStruct`). GitHub redirects the old URL.
-Afterwards: `pages.yml` keeps working and the site appears at `mathstruct.org/FiniteFields`
-(MathStruct's organisation pages use that domain); set `baseUrl` in `site/quartz.config.ts` to
-`mathstruct.org/FiniteFields` and update the footer link and the README; give the Claude GitHub
-App access to the repository in the new organisation. The Julia General registry comes later: a
+**Moved to MathStruct (done 2026-11-19).** The repository is `MathStruct/FiniteFields`; GitHub
+redirects the old URL. `baseUrl` is `mathstruct.org/FiniteFields` and the footer links to the new
+repository. `pages.yml` pushes to the repository's `gh-pages` branch, as Lenticulum.jl does; for
+the site to appear, GitHub Pages must be set to serve `gh-pages` in the repository's settings
+(not checked from here). A cloud session must be started with `MathStruct/FiniteFields` as its
+source (a session cannot hold two repositories with the same name). The Julia General registry comes later: a
 package can only be registered once it exists and has a release; a package in a subdirectory
 is registered with `@JuliaRegistrator register subdir=julia/FiniteFieldArithmetic.jl`.
 
 ## Open questions for the maintainer
 
-1. **Printing a field that does not fill its storage** (e.g. $\mathbb{F}_{2^7}$ in a `UInt8`):
-   (a) binary with exactly $n$ digits, `0b0011011`; (b) hex plus the field, `0x1b` with
-   `GF(2^7)` shown in the REPL; (c) something else?
-2. **Default representation:** yes or no to the proposal above (nimbers for $2^k$, Conway
-   otherwise, standard polynomials as alternatives)?
-3. **Go for implementation:** the arithmetic is the priority, but the go has not been given. Say
+1. **Go for implementation:** the arithmetic is the priority, but the go has not been given. Say
    when J0 (skeleton, tests, benchmarks) may start.
-4. **Learners on finite fields:** when you are ready, write the ideas down (a research-question
+2. **Learners on finite fields:** when you are ready, write the ideas down (a research-question
    note, `vault/Research Questions/`), so the arithmetic API can be checked against them.
-5. **Transfer** to MathStruct: tell the next session when it is done, so it updates the URLs.
-6. **Milestones** (deferred).
+3. **GitHub Pages:** check that the repository's Pages setting serves the `gh-pages` branch.
+4. **Milestones** (deferred).
 
 ## Known issues
 

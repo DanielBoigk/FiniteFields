@@ -56,8 +56,6 @@ comes first in every section.
   lines, missing sources, unlisted `sorry`s.
 - **T4 — CI, remaining:** a benchmark job (on demand, not per push) once `bench/` exists; a job
   that fails on an unlisted `sorry` (with T3).
-- **T6 — Move to MathStruct:** after the maintainer transfers the repository, set `baseUrl` to
-  `mathstruct.org/FiniteFields`, update README and footer links.
 - **T7 — Register `FiniteFieldArithmetic.jl`** in the General registry
   (`subdir=julia/FiniteFieldArithmetic.jl`) once it exists and has a first release.
 
@@ -83,7 +81,8 @@ comes first in every section.
 - **J1a — Representations:** nimbers for $n = 2^k$ (subfields nested as integers), Conway
   polynomials for every $n$ (pseudo-Conway beyond the tables), standard polynomials (AES, GHASH,
   ...) for cryptanalysis and interoperability; selected by a type parameter; conversion maps
-  between them. Defaults proposed in Status, awaiting the maintainer.
+  between them. **Decided (2026-11-19):** nimbers default, Conway secondary, the others
+alternatives. Printing always hex; the REPL adds the field when it does not fill its storage.
 - **J1b — Arbitrary $n$:** a function (or macro, if a function cannot give type stability) that
   constructs $\mathbb{F}_{2^n}$ for any $n$: picks the smallest fitting `UInt` for $n \le 128$,
   multi-word storage above; finds an irreducible polynomial (low-weight trinomial or pentanomial
@@ -115,6 +114,8 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
 
 - **T4a — CI** (2026-11-19): path-filtered `lean.yml` and `julia.yml`, and `full-ci.yml` (all
   components plus a Quartz build) on the `full-ci` branch. Not yet run on GitHub.
+- **T6 — Move to MathStruct** (2026-11-19): repository transferred by the maintainer; `baseUrl`
+  `mathstruct.org/FiniteFields`, footer link updated.
 - **T5 — `flake.lock` and `lean/lake-manifest.json` committed** (2026-11-19).
 - **FF-001 — Prime-field starter** (2026-11): Lean smoke test of mathlib's `ZMod` field instance.
   Its Julia half was removed on 2026-11-19 (implemented without the maintainer's go).
