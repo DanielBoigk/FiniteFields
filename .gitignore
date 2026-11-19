@@ -6,7 +6,6 @@
 
 # Lean
 /lean/.lake/
-/lean/lake-manifest.json
 
 # Quartz checkout and generated site
 /site/.quartz/

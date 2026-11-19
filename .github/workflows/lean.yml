@@ -1,0 +1,35 @@
+name: Lean
+
+# Runs only when the Lean project (or this workflow) changes, so Julia or vault changes do not
+# trigger a mathlib build. The full suite on every component runs from `full-ci.yml`.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lean/**"
+      - ".github/workflows/lean.yml"
+  pull_request:
+    paths:
+      - "lean/**"
+      - ".github/workflows/lean.yml"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: lake build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Installs the toolchain from lean/lean-toolchain, fetches the mathlib cache
+      # (`lake exe cache get`), then runs `lake build`.
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: lean

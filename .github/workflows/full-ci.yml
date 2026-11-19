@@ -1,0 +1,27 @@
+name: Full CI
+
+# The whole suite, regardless of which paths changed. Run it by pushing to the `full-ci` branch
+# (e.g. `git push origin HEAD:full-ci --force`) or from the Actions tab. Day-to-day pushes and pull
+# requests only run the workflow of the component they touch (`lean.yml`, `julia.yml`).
+on:
+  push:
+    branches: [full-ci]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lean:
+    uses: ./.github/workflows/lean.yml
+  julia:
+    uses: ./.github/workflows/julia.yml
+  site:
+    name: Quartz build (no deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: site/build.sh

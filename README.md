@@ -67,6 +67,12 @@ On pushes to `main` that touch `vault/` or `site/`, the
 [publish workflow](.github/workflows/pages.yml) rebuilds the site and deploys it to the
 `gh-pages` branch.
 
+## Continuous integration
+
+Lean (`lake build`) and Julia (`Pkg.test()` for every package under `julia/`) run on pushes to
+`main` and pull requests, each only when its own files change. Push to the `full-ci` branch, or
+start "Full CI" from the Actions tab, to run every check including a Quartz build.
+
 ## Project workflow
 
 1. Write user-visible behavior and acceptance criteria in `vault/Specifications/`.

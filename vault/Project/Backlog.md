@@ -47,8 +47,10 @@ comes first in every section.
   whether it can be limited to our modules.
 - **T3 — Note checker** (Lenticulum's `check_notes.py` as model): dangling wikilinks, missing tag
   lines, missing sources, unlisted `sorry`s.
-- **T4 — CI:** `lake build` job; later the Julia test and benchmark jobs.
-- **T5 — Commit `flake.lock` and `lake-manifest.json`** (see Status, open questions).
+- **T4 — CI, remaining:** a benchmark job (on demand, not per push) once `bench/` exists; a job
+  that fails on an unlisted `sorry` (with T3).
+- **T6 — Site address:** set `baseUrl` and the deploy target once decided (Status, open
+  question 4).
 
 ## L — Lean
 
@@ -65,14 +67,28 @@ comes first in every section.
 
 - **J0 — Package skeleton, test first:** `test/` with Aqua.jl, JET.jl, DispatchDoctor.jl;
   `bench/` environment with a benchmark suite; CI.
-- **J1 — $\mathbb{F}_{2^n}$ elements** in the smallest fitting `UInt` (`UInt8` … `UInt128`),
-  hex printing, `+` as XOR.
-- **J2 — Multiplication strategies**, selected by dispatch and compared by benchmark: shift-and-add,
-  log/antilog tables (small $n$), carry-less multiplication (x86 `PCLMULQDQ`, ARM `PMULL` via LLVM
+- **J1 — Byte-sized $\mathbb{F}_{2^n}$ (priority):** $\mathbb{F}_2$, $\mathbb{F}_{2^8}$,
+  $\mathbb{F}_{2^{16}}$, $\mathbb{F}_{2^{32}}$, $\mathbb{F}_{2^{64}}$, $\mathbb{F}_{2^{128}}$, each
+  stored in the matching `UInt` (`Bool`/`UInt8` for $\mathbb{F}_2$, open); `+` as XOR; hex in
+  `print` and in the REPL.
+- **J1a — Defining polynomials, both kinds:** standard low-weight polynomials (AES, GHASH, ...)
+  and Conway polynomials, selected by a type parameter; one is the default (Status, open
+  question 2).
+- **J1b — Arbitrary $n$:** a function (or macro, if a function cannot give type stability) that
+  constructs $\mathbb{F}_{2^n}$ for any $n$: picks the smallest fitting `UInt` for $n \le 128$,
+  multi-word storage above; finds an irreducible polynomial (low-weight trinomial or pentanomial
+  search with an irreducibility test) or takes a Conway polynomial from a table.
+- **J2 — Multiplication strategies**, selected by dispatch and compared by benchmark; both table
+  and computed variants where possible (maintainer, 2026-11-19), small fields probably tables
+  only: shift-and-add, log/antilog tables (small $n$), carry-less multiplication (x86 `PCLMULQDQ`, ARM `PMULL` via LLVM
   intrinsics), reduction for sparse polynomials; profiled.
 - **J3 — Inversion and division:** Fermat, extended Euclid, Itoh–Tsujii; benchmarked.
 - **J4 — $\mathbb{F}_p$** in the smallest fitting `UInt`; Barrett/Montgomery as options.
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
+- **J6 — Constant-time variants**, if cryptographic use is in scope (Status, open question 1).
+- **J7 — $\overline{\mathbb{F}}_2$:** elements tagged with their degree, operations embed into
+  $\mathbb{F}_{2^{\operatorname{lcm}(m,n)}}$ through Conway polynomials (pseudo-Conway beyond the
+  tables). After J1–J3. Lean counterpart: `AlgebraicClosure (ZMod 2)`.
 
 ## Sorry ledger
 
@@ -83,5 +99,8 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
 
 ## Done
 
+- **T4a — CI** (2026-11-19): path-filtered `lean.yml` and `julia.yml`, and `full-ci.yml` (all
+  components plus a Quartz build) on the `full-ci` branch. Not yet run on GitHub.
+- **T5 — `flake.lock` and `lean/lake-manifest.json` committed** (2026-11-19).
 - **FF-001 — Prime-field starter** (2026-11): Lean smoke test of mathlib's `ZMod` field instance.
   Its Julia half was removed on 2026-11-19 (implemented without the maintainer's go).

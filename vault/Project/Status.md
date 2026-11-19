@@ -4,7 +4,7 @@
 > that starts reads it after `AGENTS.md`; a session that ends updates it. Replace stale text
 > rather than appending; history belongs in git.
 
-**Last updated:** 2026-11-19, on branch `plan/agents-handoff` (made from `main` at `a95d81f`).
+**Last updated:** 2026-11-19 (second session of the day), on branch `plan/agents-handoff` (made from `main` at `a95d81f`, pushed).
 
 ## Stage
 
@@ -31,12 +31,26 @@ until the go: notes, plans, specifications, templates, tooling the maintainer as
     `.#lean` fetched elan 4.2.4 and had no Julia; with a `julia` already on `PATH` the hook used
     it and fetched nothing. **Not verified:** macOS, aarch64, and the normal (non-overridden)
     GitHub fetch of nixpkgs.
-  - `flake.lock` is still not committed; the first `nix develop` writes it. Commit it.
+  - `flake.lock` is committed. It was written by hand from the content hash of a local export
+    of the pinned revision (the proxy blocks GitHub tarballs), and Nix accepted it: it resolved the
+    input from the store by that hash and evaluated the shells without the override.
+- **`lean/lake-manifest.json` is committed** (no longer git-ignored), written by `lake update`
+  with Lean 4.36.0; it pins mathlib to `fc4f59e` (tag `v4.36.0`) and its dependencies.
+- **CI:** `lean.yml` (runs `lake build` via `leanprover/lean-action@v1`) and `julia.yml` (tests
+  every `julia/<Pkg>/`; skipped while there is none) run on pushes to `main` and on pull requests
+  **only when their own paths change**. `full-ci.yml` runs both plus a Quartz build (no deploy) on
+  a push to the `full-ci` branch or by hand. `pages.yml` is unchanged. The workflows parse as YAML
+  and the action tags exist; **they have not run on GitHub yet.**
+- **Cloud environment:** this session moved to a personal environment "FiniteFields" that also
+  allows `release.lean-lang.org` and `releases.lean-lang.org` (the Lean toolchain downloads), which
+  the Default environment blocked.
 
 ## Next
 
-Wait for the maintainer's answers to the open questions below, then turn the plan into backlog
-rows that are ready to work on. The plan lives in [[Backlog]] (sections V, T, L, J).
+The maintainer wants the arithmetic first (2026-11-19) but has **not yet given the go** to write
+code. When it comes, start with backlog J0 (package skeleton, tests, benchmark suite) and J1/J2
+for $\mathbb{F}_{2^8}$, in that order, test first. Before that, open questions 1 and 3 below
+shape the type design.
 
 ## Answers to the maintainer's questions (2026-11-19)
 
@@ -75,31 +89,59 @@ a finite field: the "scalar products over $\mathbb{F}_q$" notes must use bilinea
 forms (`LinearMap.BilinForm`, `QuadraticForm`) instead. No category of fields (`FieldCat`) was found
 under `Mathlib/Algebra/Category/`; if needed it is a full subcategory of `CommRingCat`.
 
+## Decisions by the maintainer (2026-11-19)
+
+- **Milestones:** deferred; the arithmetic is the priority.
+- **Field sizes:** first $\mathbb{F}_2$ and the byte-sized fields $\mathbb{F}_{2^8}$,
+  $\mathbb{F}_{2^{16}}$, $\mathbb{F}_{2^{32}}$, $\mathbb{F}_{2^{64}}$, $\mathbb{F}_{2^{128}}$.
+  Also wanted: a function or macro that constructs $\mathbb{F}_{2^n}$ for **arbitrary $n$**
+  (backlog J1b). Asked whether $n = \infty$ is possible: see the answer below (J7).
+- **Defining polynomials: both** Conway and standard low-weight ones, one of them the default
+  (which one is open question 2).
+- **Strategies:** offer both table-based and computed arithmetic where possible; small fields
+  probably just lookup tables. Constant-time (cryptographic) use is still under consideration
+  (open question 1).
+- **Hex** both for `print`/`string` and in the REPL (`show`).
+- **Layout:** `julia/FiniteFieldArithmetic.jl/`.
+- **`lake-manifest.json`:** commit it (done).
+- **CI:** yes, path-filtered, with a branch that runs the full suite (done: `full-ci`).
+- **mathlib upstreaming:** decide case by case when it comes up.
+- **Site address:** leaning towards `mathstruct.org/FiniteFields` over
+  `danielboigk.github.io/FiniteFields`; not final (open question 4).
+
+## Answers to the follow-up questions (2026-11-19)
+
+**Is $n = \infty$ possible?** Yes in a precise sense: the algebraic closure
+$\overline{\mathbb{F}}_2 = \bigcup_n \mathbb{F}_{2^n}$. No element needs infinitely many bits;
+each lives in some finite $\mathbb{F}_{2^n}$. An implementation stores an element with the degree
+of the field it lives in, and an operation on elements of $\mathbb{F}_{2^m}$ and
+$\mathbb{F}_{2^n}$ embeds both into $\mathbb{F}_{2^{\operatorname{lcm}(m,n)}}$. This needs a
+*compatible* system of embeddings, which is what Conway polynomials provide (or
+pseudo-Conway polynomials computed on demand where the tables end). Sizes grow quickly, so it is
+an exact-arithmetic tool, not a fast one. In Lean it is mathlib's `AlgebraicClosure (ZMod 2)`. It
+is in scope as a later item (J7, V3), after the fixed-size fields.
+
+**What can go wrong when upstreaming to mathlib?** Review takes weeks to months and asks for
+mathlib's style, naming and generality, so the result is often restated or moved. A more general
+version can clash with existing `RCLike` APIs and need a refactor of mathlib itself. Anything
+with `sorry` cannot go. While a PR is open, our copy and mathlib's can diverge, and after a merge
+we only get it by bumping our mathlib pin. None of this is harmful; it costs time, which is why
+case by case is right.
+
 ## Open questions for the maintainer
 
-1. **Your message ended with an unfinished bullet** ("Please \") in the Quartz section. What did
-   you want to add?
-2. **Julia layout:** `julia/FiniteFieldArithmetic.jl/` (keeps the current `julia/` folder) or
-   Lenticulum's `lib/FiniteFieldArithmetic.jl/`? Recommendation: `julia/`, since this repository
-   also has `lean/`.
-3. **Field sizes for characteristic 2 first:** which $n$ matter most? Proposal: $\mathbb{F}_{2^8}$
-   (AES, Reed–Solomon), $\mathbb{F}_{2^{16}}$, $\mathbb{F}_{2^{64}}$, $\mathbb{F}_{2^{128}}$
-   (GHASH), then generic $n \le 128$; anything above 128 bits needs multi-word elements.
-4. **Defining polynomials:** Conway polynomials (canonical, compatible embeddings), standard
-   low-weight ones (AES's $x^8+x^4+x^3+x+1$), or both, chosen by a type parameter?
-5. **Hex printing:** should only `print`/`string` give hex (e.g. `0x1b`), with `show` in the REPL
-   giving more context such as `0x1b ∈ GF(2^8)`, or should both be plain hex?
-6. **Is cryptographic use in scope** (constant-time arithmetic)? It rules out table lookups for
-   secret data and should be decided before the multiplication strategies are designed.
-7. **Lean API docs:** try doc-gen4 under a subpath (T2), or are links to the hosted mathlib docs
-   plus Lean blocks in the notes enough for now?
-8. **mathlib upstreaming:** when we generalise a result mathlib states only for
-   $\mathbb{R}$/$\mathbb{C}$, should it also go upstream as a mathlib PR, or stay local?
-9. **`lake-manifest.json`** is git-ignored. Recommendation: commit it, so `lake exe cache get`
-   and the mathlib revision are reproducible.
-10. **CI:** add jobs for `lake build` (and later the Julia tests) beside the Pages workflow?
-11. The site's `baseUrl` is the placeholder `example.org/finitefields`. Where will it be hosted
-    (e.g. `mathstruct.org/FiniteFields`)?
+1. **Constant-time arithmetic** (cryptographic use): in scope or not? If yes, table lookups on
+   secret data are out for the affected types, and that splits the strategy design in J2.
+2. **Which polynomial is the default:** standard low-weight ones (AES $x^8+x^4+x^3+x+1$, GHASH
+   $x^{128}+x^7+x^2+x+1$; interoperable with existing software) or Conway (canonical, compatible
+   embeddings, needed for $\overline{\mathbb{F}}_2$)? Recommendation: standard as default for the
+   byte-sized fields, Conway selectable and default for the generic constructor.
+3. **REPL format:** plain `0x1b`, or `0x1b` plus the field (e.g. `GF(2^8)(0x1b)` in `show`, `0x1b`
+   in `print`)? Both are hex; the second shows the type.
+4. **Site address:** `mathstruct.org/FiniteFields` needs the repository in the MathStruct
+   organisation (or a deploy into it, as Lenticulum.jl does), otherwise GitHub serves it at
+   `danielboigk.github.io/FiniteFields`. `site/quartz.config.ts` still has the placeholder.
+5. **Milestones** (deferred).
 
 ## Known issues
 

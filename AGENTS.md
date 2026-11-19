@@ -32,9 +32,10 @@ conjecture or an expectation. When you find something wrong, fix it or record it
 | `vault/Project/` | `Status.md` (handoff), `Backlog.md`, `Problems.md`, `Decisions/` (ADRs) |
 | `vault/templates/` | note templates; start every new note from one |
 | `lean/` | Lean 4 + mathlib (`lean-toolchain` and the mathlib tag in `lakefile.lean` move together) |
-| `julia/` | Julia packages; does not exist yet (planned: `FiniteFieldArithmetic.jl` first) |
+| `julia/` | Julia packages, one directory each (`julia/FiniteFieldArithmetic.jl/` first); does not exist yet |
 | `site/` | the Quartz build: `build.sh`, `quartz.config.ts`, `quartz.layout.ts` |
-| `flake.nix` | dev shells; see the README |
+| `flake.nix`, `flake.lock` | dev shells; see the README |
+| `.github/workflows/` | CI, see below |
 
 ## Priorities set by the maintainer
 
@@ -96,8 +97,16 @@ conjecture or an expectation. When you find something wrong, fix it or record it
 - **No integers wider than necessary.** Element storage uses the smallest unsigned type that
   fits (`UInt8` for $\mathbb{F}_{2^8}$, ...). Offer several arithmetic strategies where they
   trade off (tables, carry-less multiplication, ...), selected by dispatch.
-- **Characteristic-2 elements print in hexadecimal.**
+- **Characteristic-2 elements print in hexadecimal**, both with `print` and in the REPL (`show`).
 - The first package is **`FiniteFieldArithmetic.jl`**: the basic field operations.
+
+## CI
+
+`lean.yml` and `julia.yml` run on pushes to `main` and on pull requests, each **only when its own
+paths change**, so a vault or Julia change does not rebuild against mathlib. To run everything
+(Lean, every Julia package, a Quartz build) push to the `full-ci` branch
+(`git push origin HEAD:full-ci --force`) or start "Full CI" from the Actions tab; do that before
+merging a change that spans components. `pages.yml` deploys the vault on pushes to `main`.
 
 ## Commits and handoff
 
