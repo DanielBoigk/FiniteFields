@@ -6,9 +6,10 @@ include(joinpath(@__DIR__, "benchmarks.jl"))
 
 tune!(SUITE)
 results = run(SUITE; verbose = false, seconds = 2)
-println("Julia ", VERSION, ", ", Sys.CPU_NAME, ", ", Sys.CPU_THREADS, " threads; N = ", N)
+println("Julia ", VERSION, ", ", Sys.CPU_NAME, ", ", Sys.CPU_THREADS, " threads; elements per group: ",
+        join(("$k: $v" for (k, v) in sort(collect(GROUP_SIZE))), ", "))
 label(key) = join((k isa Tuple ? join(k, " / ") : k for k in key), " / ")
 println(rpad("benchmark", 44), "median ns/element")
 for (key, trial) in sort(collect(BenchmarkTools.leaves(results)); by = label ∘ first)
-    println(rpad(label(key), 44), round(median(trial).time / N; digits = 3))
+    println(rpad(label(key), 44), round(median(trial).time / GROUP_SIZE[first(key)]; digits = 3))
 end

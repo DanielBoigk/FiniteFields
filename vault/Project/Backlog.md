@@ -78,9 +78,6 @@ comes first in every section.
 
 ## J — Julia (`FiniteFieldArithmetic.jl`)
 
-- **J1 — Byte-sized nimber fields above GF(256) (next):** $\mathbb{F}_{2^{16}}$ (`UInt16`) …
-  $\mathbb{F}_{2^{128}}$ (`UInt128`), recursing down to the GF(256) tables; tests by subfield
-  nesting, random axiom checks and the Fermat-power rules (exhaustive checks end at 8 bits).
 - **J1a — Representations:** nimbers for $n = 2^k$ (subfields nested as integers), Conway
   polynomials for every $n$ (pseudo-Conway beyond the tables), standard polynomials (AES, GHASH,
   ...) for cryptanalysis and interoperability; selected by a type parameter; conversion maps
@@ -90,6 +87,9 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
   constructs $\mathbb{F}_{2^n}$ for any $n$: picks the smallest fitting `UInt` for $n \le 128$,
   multi-word storage above; finds an irreducible polynomial (low-weight trinomial or pentanomial
   search with an irreducibility test) or takes a Conway polynomial from a table.
+- **J2a — Faster large nimber levels:** GF(2^16) log/exp tables as the recursion base, and/or
+  carry-less multiplication in a polynomial basis behind a change of basis; compare with
+  `MulTable` (GF(2^128): 73 ns per product, `src/nimber.md`).
 - **J2 — Multiplication strategies**, selected by dispatch and compared by benchmark; both table
   and computed variants where possible (maintainer, 2026-11-19), small fields probably tables
   only: shift-and-add, log/antilog tables (small $n$), carry-less multiplication (x86 `PCLMULQDQ`, ARM `PMULL` via LLVM
@@ -120,8 +120,9 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
 
 - **J0 — `FiniteFieldArithmetic.jl` skeleton** (2026-11-19): tests first, Aqua, JET, DispatchDoctor,
   `bench/` suite and profile script, implementation notes; CI tests Julia `1` and `min`.
-- **J1 (part) — nimber GF(2), GF(4), GF(16), GF(256)** (2026-11-19): strategies `Recursive`,
-  `MulTable` (default), `LogTable`; measurements in `src/nimber.md`.
+- **J1 — nimber fields GF(2) … GF(2^128)** (2026-11-19): `Nimber{0..7}` in the smallest fitting
+  `UInt`; strategies `Recursive`, `MulTable` (default), `LogTable` sharing one recursion;
+  measurements in `src/nimber.md`.
 - **T4a — CI** (2026-11-19): path-filtered `lean.yml` and `julia.yml`, and `full-ci.yml` (all
   components plus a Quartz build) on the `full-ci` branch. Not yet run on GitHub.
 - **T6 — Move to MathStruct** (2026-11-19): repository transferred by the maintainer; `baseUrl`

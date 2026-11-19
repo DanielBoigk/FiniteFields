@@ -4,47 +4,40 @@
 > that starts reads it after `AGENTS.md`; a session that ends updates it. Replace stale text
 > rather than appending; history belongs in git.
 
-**Last updated:** 2026-11-19, on branch `plan/agents-handoff` (from `main` at `a95d81f`; pushed;
-not merged).
+**Last updated:** 2026-11-19, on branch **`dev-danielb`** (the working branch; pushed).
+`plan/agents-handoff` is merged into it and no longer used.
 
 ## Stage
 
-**Implementation has started** (maintainer's go, 2026-11-19: "start with J0 and nimber GF(2^8)").
-The planning-phase restriction in `AGENTS.md` is lifted for the backlog items the maintainer has
-approved; ask before starting a new section of the backlog.
+Implementation of approved items. Approved and done so far: J0 and the nimber fields GF(2) …
+GF(2^128). Ask before starting a backlog section the maintainer has not approved.
 
 ## Done last
 
-- **J0 — `julia/FiniteFieldArithmetic.jl` skeleton**, test first (the tests were committed failing,
-  then the implementation): `test/` (Aqua.jl, JET.jl `test_package` and `@test_opt`), DispatchDoctor
-  `@stable` on all arithmetic, `bench/` (BenchmarkTools `SUITE`, `run.jl`, `profile_nimber.jl`),
-  implementation notes `src/binaryfield.md`, `src/nimber.md`. CI: `julia.yml` now tests Julia `1`
-  and `min` (1.10, the `[compat]` floor).
-- **Nimber fields GF(2) ⊂ GF(4) ⊂ GF(16) ⊂ GF(256)** (`Nimber{K, UInt8}`, aliases `GF2` … `GF256`),
-  per [[ADR-0004 Nimbers as the default representation of GF(2^n)]]. Strategies `Recursive`,
-  `MulTable`, `LogTable`; default `MulTable` (0.44–0.49 ns per product in bulk, 2.1 ns latency).
-  Hex printing; the REPL names the field when it does not fill its byte.
-- **Verified:** `Pkg.test()` passes, 265,388 checks, on Julia 1.13.1 (x86_64-linux): the mex
-  definition below 16, the Fermat-power rules, exhaustive field axioms on GF(256), exhaustive
-  agreement of the strategies, Frobenius and the cyclic group, subfield nesting, printing, Aqua,
-  JET. Benchmarks and profile recorded in `src/nimber.md`.
-- **Not verified:** Julia 1.10 (`min`, only in CI, which has not run); macOS/ARM; GPU use.
-- A bug found while checking a note: `GF256(7) == 7` threw; equality with other numbers is now
-  `false`, with a regression test.
+- **Nimber fields GF(2^16), GF(2^32), GF(2^64), GF(2^128)** (`Nimber{4..7}` in `UInt16` … `UInt128`,
+  aliases `GF2_16` … `GF2_128`), tests first. All strategies now share one recursion and differ in
+  their base case (`Recursive`: GF(2); `MulTable`, `LogTable`: the GF(256) tables); halves are
+  narrowed to the type of the level below. Powers reduce the exponent in the storage type (also
+  `UInt128`, `BigInt` exponents).
+- **Measured** (`src/nimber.md`): `MulTable` is fastest at every level and the default; ns per
+  product in bulk: GF(256) 0.49, GF(2^16) 1.7, GF(2^32) 7.0, GF(2^64) 24.9, GF(2^128) 73. Profile:
+  no allocations, no hotspot; half the GF(2^128) time is the 81+ base lookups.
+- **Verified:** `Pkg.test()` passes, 463,506 checks, Julia 1.13.1, x86_64-linux (exhaustive on
+  GF(256) and on GF(2^16) inverses; structural oracles above).
+- **Not verified:** Julia 1.10 and CI as a whole (the `full-ci` run of the previous commit could
+  not be read from this session; check the Actions tab); macOS/ARM; GPU.
 
-Earlier the same day: `AGENTS.md`, the flake fix (lazy Julia/elan), `flake.lock`,
-`lean/lake-manifest.json` (`lake build` passes), path-filtered CI with a `full-ci` branch, the
-move to `MathStruct/FiniteFields` (`baseUrl` `mathstruct.org/FiniteFields`). Details in git.
+Earlier: J0 and nimber GF(256) (ADR-0004); `AGENTS.md`; flake fix; lock files; path-filtered CI
+with a `full-ci` branch; move to `MathStruct/FiniteFields`. Details in git.
 
-## Next
+## Next (proposals, need the maintainer's go)
 
-1. **J1 — larger nimber levels**: GF(2^16) (`UInt16`) … GF(2^128) (`UInt128`), recursing down to
-   the GF(256) tables (a full table stops being possible at 16 bits). Tests: the same exhaustive
-   checks are impossible above 16 bits, so use the subfield nesting (products of GF(256) values
-   agree), random field-axiom checks, and the Fermat-power rules at every level.
-2. **J8 — bulk multiplication**: `Recursive` is scalar (179 instructions, no 8-bit SIMD shifts on
-   x86); bitslicing is the candidate for fast table-free and GPU arithmetic.
-3. Then J1a/J1b (Conway representation, arbitrary $n$).
+1. **J2 for nimbers, speed of the large levels:** GF(2^128) costs 73 ns per product. Options:
+   (a) GF(2^16) log/exp tables as the recursion base (one level fewer, ~256 KiB of tables);
+   (b) carry-less multiplication in a polynomial basis behind a change of basis (a bit matrix),
+   attractive in bulk. Measure both against the current default.
+2. **J8 — bulk multiplication** (bitslicing; also the route to GPU).
+3. **J1a/J1b** — Conway representation and arbitrary $n$ (e.g. GF(2^7)).
 
 ## Decisions in force (maintainer, 2026-11-19)
 
@@ -72,8 +65,8 @@ move to `MathStruct/FiniteFields` (`baseUrl` `mathstruct.org/FiniteFields`). Det
 1. **Learners on finite fields:** when you are ready, write the ideas down (a research-question
    note in `vault/Research Questions/`), so the arithmetic API can be checked against them.
 2. **GitHub Pages:** check that the repository's Pages setting serves the `gh-pages` branch.
-3. **Merging:** `plan/agents-handoff` holds everything since 2026-11-19; open a pull request to
-   `main`?
+3. **`main`:** `dev-danielb` holds everything since 2026-11-19; merge it into `main` when you
+   want the site deployed (`pages.yml` deploys from `main`).
 4. **Milestones** (deferred).
 
 ## Known issues

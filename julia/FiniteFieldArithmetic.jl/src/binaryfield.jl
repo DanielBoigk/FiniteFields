@@ -39,14 +39,20 @@ characteristic(::Type{<:BinaryFieldElement}) = 2
 All ``2^n`` elements of `F`, in the order of their bit patterns.
 """
 elements(::Type{F}) where {F <: BinaryFieldElement} =
-    (unsafe_frombits(F, storagetype(F)(i)) for i in 0:(2^degree(F) - 1))
+    (unsafe_frombits(F, b) for b in zero(storagetype(F)):max_bits(F))
 
 # Whether the bit pattern fills the storage type (GF(256) in a UInt8 does, GF(16) does not).
 fills_storage(::Type{F}) where {F <: BinaryFieldElement} = degree(F) == 8 * sizeof(storagetype(F))
 
-# Order of the multiplicative group, as an Int. Valid while degree(F) ≤ 62, which covers every
-# field implemented so far; wider fields need a wider exponent type here.
-multiplicative_order(::Type{F}) where {F <: BinaryFieldElement} = (1 << degree(F)) - 1
+# The largest bit pattern, 2^n - 1, in the storage type (no wider integer needed, even for
+# GF(2^128), where it is typemax(UInt128)).
+function max_bits(::Type{F}) where {F <: BinaryFieldElement}
+    S = storagetype(F)
+    return fills_storage(F) ? typemax(S) : (one(S) << degree(F)) - one(S)
+end
+
+# Order of the multiplicative group, 2^n - 1, in the storage type.
+multiplicative_order(::Type{F}) where {F <: BinaryFieldElement} = max_bits(F)
 
 @stable default_mode = "error" begin
     Base.:+(x::F, y::F) where {F <: BinaryFieldElement} = unsafe_frombits(F, bits(x) ⊻ bits(y))
@@ -65,9 +71,12 @@ multiplicative_order(::Type{F}) where {F <: BinaryFieldElement} = (1 << degree(F
             n < 0 && throw(DivideError())
             return n == 0 ? one(x) : x
         end
-        # x^(2^n - 1) = 1 for x ≠ 0, so the exponent only matters modulo the group order;
-        # reducing it also turns a negative exponent into a positive one.
-        e = Int(mod(n, multiplicative_order(typeof(x))))
+        # x^q = 1 for x ≠ 0 and q = 2^n - 1, so the exponent only matters modulo q. The reduced
+        # exponent is computed in the storage type S (q fits there); for n < 0, with
+        # m = (-(n + 1)) mod q, one has n ≡ -(m + 1) ≡ q - 1 - m, which never under- or overflows.
+        S = storagetype(typeof(x))
+        q = multiplicative_order(typeof(x))
+        e = n >= 0 ? S(rem(n, q)) : q - one(S) - S(rem(-(n + 1), q))
         return Base.power_by_squaring(x, e)
     end
 end
@@ -94,9 +103,7 @@ Base.hash(x::BinaryFieldElement, h::UInt) = hash(bits(x), hash(:BinaryFieldEleme
 
 # Uniform random elements.
 function Random.rand(rng::Random.AbstractRNG, ::Random.SamplerType{F}) where {F <: BinaryFieldElement}
-    S = storagetype(F)
-    mask = fills_storage(F) ? typemax(S) : (one(S) << degree(F)) - one(S)
-    return unsafe_frombits(F, rand(rng, S) & mask)
+    return unsafe_frombits(F, rand(rng, storagetype(F)) & max_bits(F))
 end
 
 # Printing: hexadecimal, one digit per four bits of the field (maintainer, 2026-11-19).

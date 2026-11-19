@@ -31,5 +31,7 @@ A subtype of `BinaryFieldElement` provides `bits(x)`, `storagetype(F)`, `degree(
 
 ## What it does not do
 
-- `^` reduces the exponent with an `Int` group order, valid for degree ≤ 62.
+- `^` reduces the exponent modulo $q = 2^n - 1$ in the storage type (for negative $n$ via
+  $n \equiv q - 1 - ((-(n+1)) \bmod q)$, which cannot overflow); exponents may be any `Integer`,
+  including `BigInt`.
 - No ordering (`<`): a finite field has none compatible with its operations.

@@ -121,6 +121,12 @@ paths change**, so a vault or Julia change does not rebuild against mathlib. To 
 (`git push origin HEAD:full-ci --force`) or start "Full CI" from the Actions tab; do that before
 merging a change that spans components. `pages.yml` deploys the vault on pushes to `main`.
 
+## Branches
+
+`dev-danielb` is the working branch (maintainer, 2026-11-19): commit there, push it, no pull
+request needed. `main` is what the site deploys from; the maintainer merges into it. `full-ci` is
+only for running the whole CI (`git push origin HEAD:full-ci --force`).
+
 ## Commits and handoff
 
 A task ends with `Status.md` and the Backlog updated. Commit messages say what changed, why, and
