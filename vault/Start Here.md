@@ -3,9 +3,11 @@
 This vault is the project record for a finite-fields library with Julia implementations and Lean
 formalizations.
 
+Agents and contributors: read `AGENTS.md` in the repository root, then [[Project/Status]].
+
 ## Project areas
 
-- [[Project/Status]] — current scope and health
+- [[Project/Status]] — handoff: where the work stands, what is next, open questions
 - [[Project/Decisions]] — decision index and rationale
 - [[Project/Problems]] — known gaps and defects
 - [[Project/Backlog]] — planned work

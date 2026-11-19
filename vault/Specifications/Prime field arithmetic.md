@@ -1,8 +1,10 @@
 # Prime field arithmetic
 
-**Status:** implemented in the Julia starter; Lean reuses mathlib's field structure
+**Status:** planned. Lean reuses mathlib's field structure (smoke test only). The Julia starter
+was removed on 2026-11-19; the Julia side will be part of `FiniteFieldArithmetic.jl` (backlog J4),
+after the characteristic-2 work.
 
-**Julia:** `julia/FiniteFields/src/FiniteFields.jl`
+**Julia:** none yet
 
 **Lean:** `lean/FiniteFields.lean`
 
@@ -30,7 +32,7 @@ Extension fields are out of scope.
   invalid moduli, and zero inverse.
 - `lake build` succeeds with the `ZMod p` field-instance example.
 
-## Known limitation
+## Open
 
-The Julia primality check uses trial division and targets small fields. It is not intended for
-large characteristics or cryptographic use.
+Element storage width, reduction strategy (Barrett, Montgomery) and primality checking are to be
+decided with J4; see `AGENTS.md`, Julia conventions.
