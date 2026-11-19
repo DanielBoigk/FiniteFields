@@ -129,20 +129,80 @@ with `sorry` cannot go. While a PR is open, our copy and mathlib's can diverge, 
 we only get it by bumping our mathlib pin. None of this is harmful; it costs time, which is why
 case by case is right.
 
+## Decisions and answers, third round (2026-11-19)
+
+**Purpose of the library (maintainer).** General theory, possibly cryptanalysis, and above all an
+experiment: **learners (machine learning) built on finite fields**. Implementing cryptographic
+algorithms is not a goal. Consequences for the design: element types must be plain bits types
+(`isbits`) that work in arrays, broadcasting, and later on GPUs; bulk operations on arrays and
+linear algebra over $\mathbb{F}_{2^n}$ matter as much as single-element speed; cryptanalysis still
+needs the cryptographers' representations (AES, GHASH) as alternatives.
+
+**Constant time:** not a goal. Only if it comes nearly free (carry-less multiplication is
+constant-time by nature; tables are not), and then only documented, not engineered (J6).
+
+**Which defining polynomial gives more structure?** Two choices are canonical and buy real
+structure; the cryptographers' polynomials buy none (they are chosen for sparse reduction).
+
+1. **Conway polynomials** $C_n$, for every $n$. $C_n$ is the lexicographically least monic
+   *primitive* polynomial of degree $n$ over $\mathbb{F}_2$ that is *compatible* with $C_m$ for
+   all $m \mid n$: $C_m(x^{(2^n-1)/(2^m-1)}) \equiv 0 \pmod{C_n}$. Structure gained: the
+   embeddings $\mathbb{F}_{2^m} \hookrightarrow \mathbb{F}_{2^n}$,
+   $\alpha_m \mapsto \alpha_n^{(2^n-1)/(2^m-1)}$, commute. Categorically, the category of finite
+   fields of characteristic 2 has $m$ embeddings $\mathbb{F}_{2^m} \to \mathbb{F}_{2^n}$ when
+   $m \mid n$ (one per Galois automorphism); Conway polynomials pick one coherently, i.e. a functor
+   from the divisibility poset $(\mathbb{N}_{>0}, \mid)$ into fields, whose colimit is a concrete
+   $\overline{\mathbb{F}}_2$. Since $\alpha_n$ is primitive, discrete logarithms are compatible
+   too (log tables of subfields are restrictions). Costs: "lexicographically least" is a
+   convention (the compatibility is the structure); tables (Lübeck's) end at some degree, beyond
+   which *pseudo-Conway* polynomials (compatible, not minimal) are computed on demand; Conway
+   polynomials are dense, so reduction is slower than with a trinomial.
+2. **Nimbers** (Conway, *On Numbers and Games*, ch. 6), for $n = 2^k$. The integers below
+   $2^{2^k}$ with nim-addition (XOR) and nim-multiplication form $\mathbb{F}_{2^{2^k}}$, and these
+   fields are **nested as sets of integers**: $\mathbb{F}_{2^8}$ is the `UInt8` values, and
+   zero-extending to `UInt16` *is* the embedding into $\mathbb{F}_{2^{16}}$. No choice of
+   polynomial at all: each level is the Artin–Schreier extension $x^2 + x + F/2$ of the previous one
+   ($F = 2^{2^{k-1}}$), and multiplication splits recursively into three half-size products. The
+   union is the quadratic closure of $\mathbb{F}_2$, and the levels $2^3, \dots, 2^7$ are exactly
+   the byte-sized fields 8, 16, 32, 64, 128. Formalized in Lean: the
+   [CombinatorialGames](https://github.com/vihdzp/combinatorial-games) project (Apache-2.0, on our
+   toolchain v4.36.0, actively developed) defines `Nimber` with its field operations and a
+   computable `NatNimber`; mathlib v4.36.0 has neither nimbers nor Conway polynomials (searched).
+   Which finite-subfield theorems it proves was not checked. Cost: not hardware friendly the way
+   carry-less multiplication of a polynomial basis is, so the 64- and 128-bit levels need
+   benchmarking against it.
+
+**Proposal (needs the maintainer's yes):** nimber representation as the default for
+$n = 2^k$; Conway (pseudo-Conway beyond the tables) as the default for every other $n$, and for
+$\overline{\mathbb{F}}_2$ (J7); the standard polynomials (AES, GHASH, ...) as alternative
+representations for cryptanalysis and interoperability. Changing representation is an
+$\mathbb{F}_2$-linear map (an $n \times n$ bit matrix), cheap in bulk.
+
+**Printing:** `0x1b` when the field fills its storage; something else when it does not (e.g.
+$\mathbb{F}_{2^7}$ in a `UInt8`). Which form is open question 1.
+
+**Moving to MathStruct and registering.** Moving the repository is a GitHub transfer that only
+the maintainer can do (Settings → Transfer, into `MathStruct`). GitHub redirects the old URL.
+Afterwards: `pages.yml` keeps working and the site appears at `mathstruct.org/FiniteFields`
+(MathStruct's organisation pages use that domain); set `baseUrl` in `site/quartz.config.ts` to
+`mathstruct.org/FiniteFields` and update the footer link and the README; give the Claude GitHub
+App access to the repository in the new organisation. The Julia General registry comes later: a
+package can only be registered once it exists and has a release; a package in a subdirectory
+is registered with `@JuliaRegistrator register subdir=julia/FiniteFieldArithmetic.jl`.
+
 ## Open questions for the maintainer
 
-1. **Constant-time arithmetic** (cryptographic use): in scope or not? If yes, table lookups on
-   secret data are out for the affected types, and that splits the strategy design in J2.
-2. **Which polynomial is the default:** standard low-weight ones (AES $x^8+x^4+x^3+x+1$, GHASH
-   $x^{128}+x^7+x^2+x+1$; interoperable with existing software) or Conway (canonical, compatible
-   embeddings, needed for $\overline{\mathbb{F}}_2$)? Recommendation: standard as default for the
-   byte-sized fields, Conway selectable and default for the generic constructor.
-3. **REPL format:** plain `0x1b`, or `0x1b` plus the field (e.g. `GF(2^8)(0x1b)` in `show`, `0x1b`
-   in `print`)? Both are hex; the second shows the type.
-4. **Site address:** `mathstruct.org/FiniteFields` needs the repository in the MathStruct
-   organisation (or a deploy into it, as Lenticulum.jl does), otherwise GitHub serves it at
-   `danielboigk.github.io/FiniteFields`. `site/quartz.config.ts` still has the placeholder.
-5. **Milestones** (deferred).
+1. **Printing a field that does not fill its storage** (e.g. $\mathbb{F}_{2^7}$ in a `UInt8`):
+   (a) binary with exactly $n$ digits, `0b0011011`; (b) hex plus the field, `0x1b` with
+   `GF(2^7)` shown in the REPL; (c) something else?
+2. **Default representation:** yes or no to the proposal above (nimbers for $2^k$, Conway
+   otherwise, standard polynomials as alternatives)?
+3. **Go for implementation:** the arithmetic is the priority, but the go has not been given. Say
+   when J0 (skeleton, tests, benchmarks) may start.
+4. **Learners on finite fields:** when you are ready, write the ideas down (a research-question
+   note, `vault/Research Questions/`), so the arithmetic API can be checked against them.
+5. **Transfer** to MathStruct: tell the next session when it is done, so it updates the URLs.
+6. **Milestones** (deferred).
 
 ## Known issues
 

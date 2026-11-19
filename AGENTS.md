@@ -39,6 +39,10 @@ conjecture or an expectation. When you find something wrong, fix it or record it
 
 ## Priorities set by the maintainer
 
+- **Purpose:** the general theory of finite fields, cryptanalysis perhaps, and machine-learning
+  "learners" built on finite fields (the maintainer's experiment). Implementing cryptographic
+  algorithms is not a goal, and neither is constant-time arithmetic.
+
 - **Characteristic 2 first.** Fields $\mathbb{F}_{2^n}$ come before odd characteristic, in the
   vault, in Lean and in Julia.
 - **Categorical view where possible.** Notes state a concept categorically when that is natural,

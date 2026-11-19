@@ -35,6 +35,13 @@ comes first in every section.
   that meet the space; **differentiability**: formal derivative, $(x^p)' = 0$, Hasse derivatives
   and Taylor expansion in characteristic $p$; Fourier analysis via additive characters
   (Walsh–Hadamard in characteristic 2); what "analysis over $\mathbb{F}_q$" means (scope of FF-004).
+- **V6 — Nimbers and Conway polynomials:** nim-addition and nim-multiplication; the nimber fields
+  $\mathbb{F}_{2^{2^k}}$ and the quadratic closure; Conway polynomials and their compatibility as a
+  functor on the divisibility poset; pseudo-Conway polynomials; changes of representation as
+  linear maps. Lean: CombinatorialGames' `Nimber` (check what it proves before relying on it).
+- **V7 — Learners over finite fields** (the maintainer's experiment): what replaces gradients
+  (discrete optimisation, interpolation, Reed–Muller, learning parity with noise), once the
+  maintainer has written the ideas down.
 - **V5 — Linear algebra over $\mathbb{F}_q$** (was FF-003): counting subspaces, $GL_n(\mathbb{F}_q)$
   order, rank, solving; specification before code.
 
@@ -49,8 +56,10 @@ comes first in every section.
   lines, missing sources, unlisted `sorry`s.
 - **T4 — CI, remaining:** a benchmark job (on demand, not per push) once `bench/` exists; a job
   that fails on an unlisted `sorry` (with T3).
-- **T6 — Site address:** set `baseUrl` and the deploy target once decided (Status, open
-  question 4).
+- **T6 — Move to MathStruct:** after the maintainer transfers the repository, set `baseUrl` to
+  `mathstruct.org/FiniteFields`, update README and footer links.
+- **T7 — Register `FiniteFieldArithmetic.jl`** in the General registry
+  (`subdir=julia/FiniteFieldArithmetic.jl`) once it exists and has a first release.
 
 ## L — Lean
 
@@ -71,9 +80,10 @@ comes first in every section.
   $\mathbb{F}_{2^{16}}$, $\mathbb{F}_{2^{32}}$, $\mathbb{F}_{2^{64}}$, $\mathbb{F}_{2^{128}}$, each
   stored in the matching `UInt` (`Bool`/`UInt8` for $\mathbb{F}_2$, open); `+` as XOR; hex in
   `print` and in the REPL.
-- **J1a — Defining polynomials, both kinds:** standard low-weight polynomials (AES, GHASH, ...)
-  and Conway polynomials, selected by a type parameter; one is the default (Status, open
-  question 2).
+- **J1a — Representations:** nimbers for $n = 2^k$ (subfields nested as integers), Conway
+  polynomials for every $n$ (pseudo-Conway beyond the tables), standard polynomials (AES, GHASH,
+  ...) for cryptanalysis and interoperability; selected by a type parameter; conversion maps
+  between them. Defaults proposed in Status, awaiting the maintainer.
 - **J1b — Arbitrary $n$:** a function (or macro, if a function cannot give type stability) that
   constructs $\mathbb{F}_{2^n}$ for any $n$: picks the smallest fitting `UInt` for $n \le 128$,
   multi-word storage above; finds an irreducible polynomial (low-weight trinomial or pentanomial
@@ -85,7 +95,11 @@ comes first in every section.
 - **J3 — Inversion and division:** Fermat, extended Euclid, Itoh–Tsujii; benchmarked.
 - **J4 — $\mathbb{F}_p$** in the smallest fitting `UInt`; Barrett/Montgomery as options.
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
-- **J6 — Constant-time variants**, if cryptographic use is in scope (Status, open question 1).
+- **J6 — Constant time:** not a goal. Document which strategies happen to be constant-time; do not
+  engineer for it.
+- **J8 — Bulk and array operations** for learners: broadcasting, SIMD/bitsliced bulk
+  multiplication, matrix products over $\mathbb{F}_{2^n}$, random sampling; GPU-compatible element
+  types. Benchmarked like single-element arithmetic.
 - **J7 — $\overline{\mathbb{F}}_2$:** elements tagged with their degree, operations embed into
   $\mathbb{F}_{2^{\operatorname{lcm}(m,n)}}$ through Conway polynomials (pseudo-Conway beyond the
   tables). After J1–J3. Lean counterpart: `AlgebraicClosure (ZMod 2)`.
