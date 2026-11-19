@@ -14,14 +14,20 @@ decision/problem/backlog separation used by
 
 ## Development environment
 
-Install [Nix with flakes enabled](https://nixos.org/download/), then run:
+Install [Nix with flakes enabled](https://nixos.org/download/), then pick the shell for the
+language you are working on:
 
 ```sh
-nix develop
+nix develop .#julia   # Julia work only; no Lean tooling is pulled in
+nix develop .#lean    # Lean work only; no Julia is pulled in
+nix develop .#quartz  # vault/site work: Node.js 22 and Git only
+nix develop           # everything: Julia plus Lean
 ```
 
-The shell provides Julia, Node.js 22, Git, and `elan`. `elan` installs the Lean version pinned in
-[`lean/lean-toolchain`](lean/lean-toolchain).
+Each language shell only activates the tool it is named after. If Julia or Lean is already
+installed on your system, the shell detects it and uses it instead of the Nix copy; the Nix
+fallback is only added to `PATH` when the tool is missing. `elan` (or an existing Lean) installs
+the Lean version pinned in [`lean/lean-toolchain`](lean/lean-toolchain).
 
 ## Julia
 
