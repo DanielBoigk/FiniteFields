@@ -3,7 +3,8 @@
 # throws on any type-unstable call to an arithmetic method; the test suite exercises them all.)
 using FiniteFieldArithmetic
 using FiniteFieldArithmetic: mul, inverse, Recursive, MulTable, LogTable, LogTable16, CLMul,
-    ScalarMatMul, TableMatMul, CLMulMatMul, matmul!, mul_elementwise!
+    ScalarMatMul, TableMatMul, CLMulMatMul, matmul!, mul_elementwise!, ScalarConstMul,
+    EagerMulBy, LazyMulBy, const_mul_broadcasted
 using JET, Test
 
 @testset "JET" begin
@@ -36,6 +37,14 @@ using JET, Test
             @test_opt matmul!(s, C, A, B)
         end
         @test_opt A * B
+        # constant times array (J8c)
+        a = fill(x, 70)
+        for s in (ScalarConstMul(), EagerMulBy(), LazyMulBy(0), LazyMulBy(typemax(Int)))
+            @test_opt const_mul_broadcasted(s, x, a)
+            @test_opt Base.Broadcast.materialize(const_mul_broadcasted(s, x, a))
+        end
+        @test_opt const_mul_broadcasted(LazyMulBy(0), x, a).f(x)
+        @test_opt x .* a
     end
     for F in (GF256, GF2_16, GF2_32)
         v = BitslicedVector(fill(F(3), 70))
