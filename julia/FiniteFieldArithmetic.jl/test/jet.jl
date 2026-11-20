@@ -3,7 +3,7 @@
 # throws on any type-unstable call to an arithmetic method; the test suite exercises them all.)
 using FiniteFieldArithmetic
 using FiniteFieldArithmetic: mul, inverse, Recursive, MulTable, LogTable, LogTable16, CLMul,
-    ScalarMatMul, TableMatMul, CLMulMatMul, matmul!, mul_elementwise!, ScalarConstMul,
+    ScalarMatMul, TableMatMul, CLMulMatMul, BitslicedMatMul, matmul!, mul_elementwise!, ScalarConstMul,
     LazyMulBy, const_mul_broadcasted
 using JET, Test
 
@@ -35,7 +35,7 @@ using JET, Test
         A, B, C = fill(x, 3, 3), fill(x, 3, 3), fill(x, 3, 3)
         m = MulBy(x)
         @test_opt m(x)
-        for s in (ScalarMatMul(MulTable()), TableMatMul(), CLMulMatMul())
+        for s in (ScalarMatMul(MulTable()), TableMatMul(), CLMulMatMul(), BitslicedMatMul())
             @test_opt matmul!(s, C, A, B)
         end
         @test_opt A * B
@@ -50,7 +50,7 @@ using JET, Test
             Base.Broadcast.broadcasted(+, const_mul_broadcasted(LazyMulBy(50), x, a), a))
         @test_opt x * a                                # Base broadcasts: the same hook as x .* a
     end
-    for F in (GF256, GF2_16, GF2_32)
+    for F in (GF256, GF2_16, GF2_32, GF2_64, GF2_128)
         v = BitslicedVector(fill(F(3), 70))
         @test_opt mul_elementwise!(v, v, v)
     end

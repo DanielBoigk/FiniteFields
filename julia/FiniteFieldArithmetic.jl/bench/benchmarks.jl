@@ -82,14 +82,15 @@ end
 # element. Matrix products of two MATMUL_N × MATMUL_N matrices per strategy, per multiply-add
 # (group "matmul <field>", MATMUL_N^3 multiply-adds).
 
-using FiniteFieldArithmetic: ScalarMatMul, TableMatMul, CLMulMatMul, matmul!, mul_elementwise!
+using FiniteFieldArithmetic: ScalarMatMul, TableMatMul, CLMulMatMul, BitslicedMatMul, matmul!,
+    mul_elementwise!
 
 const N_BULK = 2^14
 const MATMUL_N = 64
 const BULK_LEVELS = (("GF256", GF256), LARGE...)
-const BITSLICED_LEVELS = (GF256, GF2_16, GF2_32)
+const BITSLICED_LEVELS = (GF256, GF2_16, GF2_32, GF2_64, GF2_128)
 const MATMUL_STRATEGIES = (ScalarMatMul(MulTable()), ScalarMatMul(LogTable16()), TableMatMul(),
-                           CLMulMatMul())
+                           CLMulMatMul(), BitslicedMatMul())
 
 let rng = Xoshiro(2027)
     for (name, F) in BULK_LEVELS

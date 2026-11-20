@@ -11,14 +11,15 @@
 
 using FiniteFieldArithmetic
 using FiniteFieldArithmetic: bits, mul, Recursive, MulTable, LogTable16, CLMul, has_pclmul,
-    MatMulStrategy, ScalarMatMul, TableMatMul, CLMulMatMul, matmul!, default_matmul_strategy,
-    mul_elementwise!
+    MatMulStrategy, ScalarMatMul, TableMatMul, CLMulMatMul, BitslicedMatMul, matmul!,
+    default_matmul_strategy, mul_elementwise!
 using LinearAlgebra, Random, Test
 
 rng = Xoshiro(20261121)
 const LEVELS = (GF2, GF4, GF16, GF256, GF2_16, GF2_32, GF2_64, GF2_128)
 const MATMUL_STRATEGIES = (ScalarMatMul(Recursive()), ScalarMatMul(MulTable()),
-                           ScalarMatMul(LogTable16()), TableMatMul(), CLMulMatMul())
+                           ScalarMatMul(LogTable16()), TableMatMul(), CLMulMatMul(),
+                           BitslicedMatMul())
 
 refmul(a, b) = mul(Recursive(), a, b)
 function refmatmul(A::AbstractMatrix{F}, B::AbstractVecOrMat{F}) where {F}
@@ -143,7 +144,7 @@ end
     end
 end
 
-@testset "bitsliced vectors, $F" for F in (GF2, GF4, GF16, GF256, GF2_16, GF2_32)
+@testset "bitsliced vectors, $F" for F in LEVELS
     for n in (0, 1, 63, 64, 65, 200, 1031)
         a, b = samples(F, n), samples(F, n)
         A, B = BitslicedVector(a), BitslicedVector(b)
@@ -168,8 +169,16 @@ end
     @test mul_elementwise!(similar(samples(F, 5)), fill(one(F), 5), fill(one(F), 5)) == fill(one(F), 5)
 end
 
-@testset "BitslicedVector is limited to GF(2^32)" begin
-    @test_throws ArgumentError BitslicedVector(zeros(GF2_64, 3))
+@testset "BitslicedVector at GF(2^64) and GF(2^128) (J8b)" begin
+    # the levels above GF(2^32) run their top recursion levels through memory: products of many
+    # blocks, all elements checked against the reference, and no allocation proportional to n
+    for F in (GF2_64, GF2_128), n in (256, 257, 3000)
+        a, b = samples(F, n), samples(F, n)
+        A, B = BitslicedVector(a), BitslicedVector(b)
+        C = similar(A)
+        @test Vector(mul_elementwise!(C, A, B)) == refmul.(a, b)
+        @test (@allocated mul_elementwise!(C, A, B)) <= 64 * 1024     # one scratch buffer
+    end
 end
 
 # --- J8b: packing by bit-matrix transposes (src/bulk.md, "Bitsliced vectors") ----------------
@@ -189,7 +198,8 @@ using FiniteFieldArithmetic: transpose64!
     end
 end
 
-@testset "packing from other vectors, $F" for F in (GF2, GF16, GF256, GF2_16, GF2_32)
+@testset "packing from other vectors, $F" for F in (GF2, GF16, GF256, GF2_16, GF2_32, GF2_64,
+                                                      GF2_128)
     a = samples(F, 300)
     @test Vector(BitslicedVector(view(a, 5:250))) == a[5:250]
     @test Vector(BitslicedVector(view(a, 300:-3:1))) == a[300:-3:1]
@@ -198,4 +208,33 @@ end
     @test (BitslicedVector(a); @allocated BitslicedVector(a)) <= 2 * sizeof(P.planes) + 1024
     out = similar(a, length(a))
     @test (Vector(P); @allocated Vector(P)) <= 2 * sizeof(out) + 1024
+end
+
+# --- J8b: the bitsliced matrix product (src/bitsliced_matmul.md) ------------------------------
+#
+# Sizes around the block boundaries of the GF(2) kernel (64 bits of the inner dimension per word,
+# 256 columns per SIMD word), and a long inner dimension; the oracle is ScalarMatMul(MulTable()),
+# itself checked against Recursive above. Structural checks: linearity in each factor.
+
+@testset "BitslicedMatMul, block boundaries, $F" for F in LEVELS
+    for (m, p, q) in ((1, 64, 256), (65, 129, 257), (2, 63, 255), (5, 1, 1), (64, 64, 64))
+        A, B = rand(rng, F, m, p), rand(rng, F, p, q)
+        R = matmul!(ScalarMatMul(MulTable()), similar(A, m, q), A, B)
+        C = fill(one(F), m, q)
+        @test matmul!(BitslicedMatMul(), C, A, B) == R
+        x = rand(rng, F, p)
+        @test matmul!(BitslicedMatMul(), similar(x, m), A, x) == refmatmul(A, x)
+    end
+    A1, A2, B = rand(rng, F, 9, 70), rand(rng, F, 9, 70), rand(rng, F, 70, 11)
+    s = BitslicedMatMul()
+    mm(X, Y) = matmul!(s, similar(X, size(X, 1), size(Y, 2)), X, Y)
+    @test mm(A1 + A2, B) == mm(A1, B) + mm(A2, B)
+    @test mm(permutedims(B), permutedims(A1)) == permutedims(mm(A1, B))   # (AB)ᵀ = BᵀAᵀ
+end
+
+@testset "BitslicedMatMul, larger sizes, $F" for F in LEVELS
+    m, p, q = 300, 1100, 70
+    A, B = rand(rng, F, m, p), rand(rng, F, p, q)
+    R = matmul!(ScalarMatMul(MulTable()), similar(A, m, q), A, B)
+    @test matmul!(BitslicedMatMul(), similar(A, m, q), A, B) == R
 end
