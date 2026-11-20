@@ -454,11 +454,13 @@ end
     BitslicedVector{N}(undef, n)
     BitslicedVector(a::AbstractVector{N})
 
-A vector of ``n`` elements of the nimber field `N` (up to ``\\mathbb{F}_{2^{32}}``) stored
+A vector of ``n`` elements of the nimber field `N` stored
 *bitsliced*: plane ``j`` holds bit ``j`` of every element, 64 elements per word. Element-wise
 products are then a fixed circuit of AND and XOR on whole words (the recursion of
 [`Recursive`](@ref), with ``\\mathbb{F}_2`` products as AND), run on four words at a time with
-SIMD, so one circuit evaluation multiplies 256 pairs. Element-wise `.*` and `.+` of two
+SIMD, so one circuit evaluation multiplies 256 pairs (at ``\\mathbb{F}_{2^{64}}`` and
+``\\mathbb{F}_{2^{128}}`` the top one or two levels of the recursion run through memory, the
+rest as at ``\\mathbb{F}_{2^{32}}``). Element-wise `.*` and `.+` of two
 `BitslicedVector`s and [`mul_elementwise!`](@ref) use it; everything else (indexing, other
 broadcasts) works element by element and is slow. Convert once with `BitslicedVector(a)` and back
 with `Vector(v)`. Measurements in `src/bulk.md`.
@@ -467,8 +469,6 @@ struct BitslicedVector{N <: Nimber} <: AbstractVector{N}
     planes::Matrix{UInt64}     # planes[w, j]: bit j - 1 of elements 64(w - 1) + 1 … 64w
     len::Int
     function BitslicedVector{N}(::UndefInitializer, n::Integer) where {N <: Nimber}
-        degree(N) <= 32 || throw(ArgumentError(
-            "BitslicedVector: GF(2^$(degree(N))) is not supported (at most GF(2^32))"))
         nw = LANES * cld(cld(n, 64), LANES)    # whole SIMD words; the padding stays zero
         return new{N}(zeros(UInt64, nw, degree(N)), n)
     end
@@ -574,6 +574,81 @@ function bitsliced_mul!(C::Matrix{UInt64}, A::Matrix{UInt64}, B::Matrix{UInt64},
     return C
 end
 
+# GF(2^64) and GF(2^128) (J8b): the tuples of 64 or 128 vectors do not stay in registers (fully
+# unrolled, a prototype took 28 and 158 ns per element). So the top one or two levels of the
+# recursion run through a scratch buffer of `Word4`s, and every level-5 product is the unrolled
+# GF(2^32) circuit on tuples of 32. Buffer layout of a level-L product at offset `to`:
+# d (h words), c (h), a0 ⊻ a1 (h), b0 ⊻ b1 (h), then the scratch of level L - 1 (h = 2^(L-1)).
+bitsliced_mul!(C::Matrix{UInt64}, A::Matrix{UInt64}, B::Matrix{UInt64}, v::Val{64}) =
+    bitsliced_mul_mem!(C, A, B, v)
+bitsliced_mul!(C::Matrix{UInt64}, A::Matrix{UInt64}, B::Matrix{UInt64}, v::Val{128}) =
+    bitsliced_mul_mem!(C, A, B, v)
+function bitsliced_mul_mem!(C::Matrix{UInt64}, A::Matrix{UInt64}, B::Matrix{UInt64},
+                            ::Val{n}) where {n}
+    L = Val(trailing_zeros(n))
+    a, b, c = (Vector{Word4}(undef, n) for _ in 1:3)
+    tmp = Vector{Word4}(undef, 3n)
+    for w in 1:LANES:size(A, 1)
+        for j in 1:n
+            @inbounds a[j] = load4(A, w, j)
+            @inbounds b[j] = load4(B, w, j)
+        end
+        bs_mul_mem!(c, 0, a, 0, b, 0, L, tmp, 0)
+        for j in 1:n
+            @inbounds store4!(C, c[j], w, j)
+        end
+    end
+    return C
+end
+
+@inline load_words(x::Vector{Word4}, o::Int, ::Val{M}) where {M} =
+    ntuple(i -> @inbounds(x[o + i]), Val(M))
+@inline function store_words!(x::Vector{Word4}, o::Int, t::NTuple{M, Word4}) where {M}
+    for i in 1:M
+        @inbounds x[o + i] = t[i]
+    end
+    return nothing
+end
+
+# out[oo + 1 : oo + 2^L] = the product of a[ao + 1 : …] and b[bo + 1 : …] at level L.
+@inline function bs_mul_mem!(out::Vector{Word4}, oo::Int, a::Vector{Word4}, ao::Int,
+                             b::Vector{Word4}, bo::Int, ::Val{5}, ::Vector{Word4}, ::Int)
+    store_words!(out, oo, bs_mul(load_words(a, ao, Val(32)), load_words(b, bo, Val(32))))
+    return nothing
+end
+for L in (6, 7)
+    @eval function bs_mul_mem!(out::Vector{Word4}, oo::Int, a::Vector{Word4}, ao::Int,
+                               b::Vector{Word4}, bo::Int, ::Val{$L}, tmp::Vector{Word4}, to::Int)
+        h = $(1 << (L - 1))
+        sub = Val($(L - 1))
+        bs_mul_mem!(tmp, to, a, ao, b, bo, sub, tmp, to + 4h)                  # d = a0 b0
+        bs_mul_mem!(tmp, to + h, a, ao + h, b, bo + h, sub, tmp, to + 4h)      # c = a1 b1
+        @inbounds for i in 1:h
+            tmp[to + 2h + i] = a[ao + i] ⊻ a[ao + h + i]
+            tmp[to + 3h + i] = b[bo + i] ⊻ b[bo + h + i]
+        end
+        bs_mul_mem!(out, oo + h, tmp, to + 2h, tmp, to + 3h, sub, tmp, to + 4h)  # e
+        bs_half_mem!(out, oo, tmp, to + h, sub)                                 # half(c)
+        @inbounds for i in 1:h
+            d = tmp[to + i]
+            out[oo + i] ⊻= d                                                    # d ⊕ half(c)
+            out[oo + h + i] ⊻= d                                                # e ⊕ d
+        end
+        return nothing
+    end
+end
+# out[oo + 1 : oo + 2^L] = half(c) at level L (out and c do not overlap).
+@inline function bs_half_mem!(out::Vector{Word4}, oo::Int, c::Vector{Word4}, co::Int, ::Val{5})
+    store_words!(out, oo, bs_half(load_words(c, co, Val(32))))
+    return nothing
+end
+@inline function bs_half_mem!(out::Vector{Word4}, oo::Int, c::Vector{Word4}, co::Int, ::Val{6})
+    c0, c1 = load_words(c, co, Val(32)), load_words(c, co + 32, Val(32))
+    store_words!(out, oo, bs_half(bs_half(c1)))
+    store_words!(out, oo + 32, bs_half(ntuple(i -> c0[i] ⊻ c1[i], Val(32))))   # not map: > 31
+    return nothing
+end
+
 # The recursion of `Recursive` on planes: an element of level K is a tuple of 2^K planes (lowest
 # bit first), its halves are the two halves of the tuple, ⊕ is XOR of planes, and the level-0
 # product is AND. The tuples are fully unrolled, so the whole circuit is straight-line code.
@@ -662,33 +737,49 @@ function pack!(P::Matrix{UInt64}, a::AbstractVector{N}, ::Val{n}) where {N <: Ni
     len = length(a)
     nfull = len >> 6
     for w in 1:nfull
-        store_planes!(P, gather_block(a, firstindex(a) + 64 * (w - 1), Val(n)), w)
+        block_planes!(view(P, w, :), a, firstindex(a) + 64 * (w - 1), Val(n))
     end
     if len > 64 * nfull                              # the last block, padded with zeros
         tail = zeros(N, 64)
         copyto!(tail, 1, a, firstindex(a) + 64 * nfull, len - 64 * nfull)
-        store_planes!(P, gather_block(tail, 1, Val(n)), nfull + 1)
+        block_planes!(view(P, nfull + 1, :), tail, 1, Val(n))
     end
     return P
 end
 
-# Row k + 1 = Σ_i element (n i + k) << (n i): the stages j ≥ n of the transpose.
-@inline function gather_block(a::AbstractVector{N}, first::Int, ::Val{n}) where {N, n}
+# y[1:n] = the n planes of the 64 elements a[first], …, a[first + 63]. GF(2^128): the two 64-bit
+# halves of the elements are two 64 × 64 bit matrices, transposed separately (a tuple of 128
+# words would leave registers and, past 32 elements, Base's tuple code allocates).
+@inline function block_planes!(y::AbstractVector{UInt64}, a::AbstractVector, first::Int,
+                               ::Val{n}) where {n}
+    store_tuple!(y, 0, transpose_gathered(gather_block(a, first, Val(n), 0)))
+    return y
+end
+@inline function block_planes!(y::AbstractVector{UInt64}, a::AbstractVector, first::Int,
+                               ::Val{128})
+    store_tuple!(y, 0, transpose_gathered(gather_block(a, first, Val(64), 0)))
+    store_tuple!(y, 64, transpose_gathered(gather_block(a, first, Val(64), 64)))
+    return y
+end
+@inline function store_tuple!(y::AbstractVector{UInt64}, o::Int, x::NTuple{n, UInt64}) where {n}
+    for j in 1:n
+        @inbounds y[firstindex(y) + o + j - 1] = x[j]
+    end
+    return y
+end
+@inline load_tuple(y::AbstractVector{UInt64}, o::Int, ::Val{n}) where {n} =
+    ntuple(j -> @inbounds(y[firstindex(y) + o + j - 1]), Val(n))
+
+# Row k + 1 = Σ_i element (n i + k) << (n i), of the element's bits from `shift` on: the stages
+# j ≥ n of the transpose.
+@inline function gather_block(a::AbstractVector{N}, first::Int, ::Val{n}, shift::Int) where {N, n}
     return ntuple(Val(n)) do r
         acc = zero(UInt64)
         for i in 0:(64 ÷ n - 1)
-            acc |= (bits(@inbounds a[first + n * i + r - 1]) % UInt64) << (n * i)
+            acc |= ((bits(@inbounds a[first + n * i + r - 1]) >> shift) % UInt64) << (n * i)
         end
         acc
     end
-end
-
-@inline function store_planes!(P::Matrix{UInt64}, x::NTuple{n, UInt64}, w::Int) where {n}
-    y = transpose_gathered(x)
-    for j in 1:n
-        @inbounds P[w, j] = y[j]
-    end
-    return P
 end
 
 function unpack!(a::AbstractVector{N}, P::Matrix{UInt64}) where {N <: Nimber}
@@ -698,23 +789,35 @@ function unpack!(a::AbstractVector{N}, P::Matrix{UInt64}, ::Val{n}) where {N <: 
     len = length(a)
     nfull = len >> 6
     for w in 1:nfull
-        scatter_block!(a, load_planes(P, w, Val(n)), firstindex(a) + 64 * (w - 1))
+        block_from_planes!(a, firstindex(a) + 64 * (w - 1), view(P, w, :), Val(n))
     end
     if len > 64 * nfull
         tail = Vector{N}(undef, 64)
-        scatter_block!(tail, load_planes(P, nfull + 1, Val(n)), 1)
+        block_from_planes!(tail, 1, view(P, nfull + 1, :), Val(n))
         copyto!(a, firstindex(a) + 64 * nfull, tail, 1, len - 64 * nfull)
     end
     return a
 end
 
-@inline load_planes(P::Matrix{UInt64}, w::Int, ::Val{n}) where {n} =
-    transpose_gathered(ntuple(j -> @inbounds(P[w, j]), Val(n)))      # an involution
+# The inverse of block_planes!: a[first], …, a[first + 63] from their n planes y[1:n].
+@inline block_from_planes!(a::AbstractVector, first::Int, y::AbstractVector{UInt64},
+                           ::Val{n}) where {n} =
+    scatter_block!(a, transpose_gathered(load_tuple(y, 0, Val(n))), first)   # an involution
+@inline function block_from_planes!(a::AbstractVector{N}, first::Int, y::AbstractVector{UInt64},
+                                    ::Val{128}) where {N}
+    lo = transpose_gathered(load_tuple(y, 0, Val(64)))
+    hi = transpose_gathered(load_tuple(y, 64, Val(64)))
+    for k in 0:63
+        x = (UInt128(hi[k + 1]) << 64) | UInt128(lo[k + 1])
+        @inbounds a[first + k] = unsafe_frombits(N, x % storagetype(N))
+    end
+    return a
+end
 
 # The inverse of gather_block.
 @inline function scatter_block!(a::AbstractVector{N}, x::NTuple{n, UInt64}, first::Int) where {N, n}
     T = storagetype(N)
-    m = (one(UInt64) << n) - one(UInt64)
+    m = n == 64 ? ~zero(UInt64) : (one(UInt64) << n) - one(UInt64)
     for i in 0:(64 ÷ n - 1), k in 0:(n - 1)
         @inbounds a[first + n * i + k] = unsafe_frombits(N, ((x[k + 1] >> (n * i)) & m) % T)
     end

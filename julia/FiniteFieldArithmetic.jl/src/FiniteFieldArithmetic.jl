@@ -12,7 +12,8 @@ Multiplication strategies ([`MulStrategy`](@ref): [`Recursive`](@ref), [`MulTabl
 [`default_inv_strategy`](@ref).
 
 Bulk operations (`src/bulk.md`): fast `rand!` for arrays, [`MulBy`](@ref) (multiplication by a
-constant), matrix products ([`matmul!`](@ref) with a [`MatMulStrategy`](@ref); `*` and
+constant), matrix products ([`matmul!`](@ref) with a [`MatMulStrategy`](@ref), among them
+[`BitslicedMatMul`](@ref) (`src/bitsliced_matmul.md`); `*` and
 `LinearAlgebra.mul!` use [`default_matmul_strategy`](@ref)), [`BitslicedVector`](@ref), and the
 strategies of `c .* a` ([`ConstMulStrategy`](@ref), chosen by [`default_constmul_strategy`](@ref)).
 
@@ -33,5 +34,6 @@ include("binaryfield.jl")
 include("nimber.jl")
 include("nimber_fast.jl")
 include("bulk.jl")
+include("bitsliced_matmul.jl")
 
 end

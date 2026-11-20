@@ -4,7 +4,8 @@
 > by a fixed constant as an $\mathbb{F}_2$-linear map (`MulBy`, used by `c .* a` for long
 > arrays), matrix products with one
 > reduction per entry in the polynomial basis (`CLMulMatMul`, the default above GF(256)), and
-> bitsliced vectors (`BitslicedVector`) up to GF(2^32). The common idea: convert or prepare once
+> bitsliced vectors (`BitslicedVector`) at every level. The bitsliced matrix product
+> (`BitslicedMatMul`) has its own note, `bitsliced_matmul.md`. The common idea: convert or prepare once
 > per array, not once per product.
 
 > Sources: E. Biham, "A fast new DES implementation in software", FSE 1997, LNCS 1267
@@ -260,9 +261,32 @@ XORs of the recursion and of the constant products.
 
 `a .* b` and `a .+ b` of two `BitslicedVector`s return `BitslicedVector`s (the `broadcasted`
 methods compute the result directly); `mul_elementwise!(c, a, b)` works in place. Everything else
-(indexing, mixed broadcasts) goes element by element and is slow. Supported up to GF(2^32): at
-GF(2^64) the tuples of 64 vectors no longer stay in registers, and a prototype (scratch, not
-committed) took 37–146 ns per element at GF(2^64) and 160–800 ns at GF(2^128), and allocated.
+(indexing, mixed broadcasts) goes element by element and is slow.
+
+### GF(2^64) and GF(2^128) (J8b)
+
+Fully unrolled, the tuples of 64 or 128 vectors do not stay in registers: an earlier prototype
+took 37–146 ns per element at GF(2^64) and 160–800 ns at GF(2^128), and one of this session
+(the level-5 circuit behind `@noinline`, tuples passed between levels) 28 and 158 ns, allocating
+1.3 and 6.4 MB per 16384 elements. So the top one (GF(2^64)) or two (GF(2^128)) levels of the
+recursion run through a scratch buffer of `Word4`s (`bs_mul_mem!`): $d = a_0b_0$ and $c = a_1b_1$
+into the buffer, the sums of the halves into the buffer, $e$ straight into the output, then
+$h(c)$ and the XORs with $d$. Each level-5 product is the unrolled GF(2^32) circuit on tuples of
+32 vectors, so a GF(2^64) product is three GF(2^32) circuits and a GF(2^128) one nine. Packing
+at GF(2^128) transposes the two 64-bit halves of the elements separately.
+
+Measured (scratch script, 2026-11-20, $2^{14}$ elements, one run, ns per element, a 4-thread
+Intel Xeon cloud VM; `bench/benchmarks.jl` now has these rows in its `bulk` groups):
+
+| field | bitsliced product | pack | unpack | scalar `a .* b` |
+|---|---|---|---|---|
+| GF(2^64) | **2.58** | 2.76 | 1.61 | 18.4 |
+| GF(2^128) | **7.41** | 5.97 | 4.62 | 41.8 |
+
+7.1 and 5.6 times faster than the scalar product; a pack of both factors and an unpack of the
+result (7.1 and 16.6 ns) cost less than one scalar product, so converting pays from one product
+on. One product allocates its scratch buffers, 12.3 KiB (GF(2^64)) and 24.3 KiB (GF(2^128)),
+independent of the length.
 
 ### Packing by bit-matrix transposes (J8b)
 
@@ -364,7 +388,7 @@ products of two arrays are in `nimber.md` and `nimber_fast.md` (GF(256) `MulTabl
 - Packing reads the source element by element (a gather with stride $n$); reading whole words of
   the source's memory and transposing those was not tried. GF(2^32) packing (1.4 ns) is the
   slowest: its 32-word block does not fit in the 16 general-purpose registers (not profiled).
-- No bitsliced matrix product, no bitsliced vectors above GF(2^32), no GPU kernels.
+- No GPU kernels. The bitsliced matrix product is in `bitsliced_matmul.md`.
 - No ARM `PMULL`: on aarch64 `CLMulMatMul` computes as `ScalarMatMul(MulTable())`. Not measured
   on a CPU without `PCLMULQDQ`.
 - Not constant time (J6, not a goal).
