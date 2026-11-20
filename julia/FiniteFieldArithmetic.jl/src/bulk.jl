@@ -394,29 +394,30 @@ const CLMUL_NC = typemax(Int)
 const CLMUL_TILE = (2, 2)
 
 @stable default_mode = "error" begin
-    # Unreduced sums of carry-less products in F_2[x], per storage type: `clacc_zero` is the empty
-    # sum, `clacc_add` adds a b, `clacc_reduce` reduces modulo f. Products of n-bit operands have
+    # Unreduced sums of carry-less products in F_2[x], per storage type: `clacc_zero(z)` is the
+    # empty sum, `clacc_add` adds a b, `clacc_reduce(acc, z)` reduces modulo f (z: a value of the
+    # storage type; a `::Type{T}` argument was not specialised under @stable and allocated). Products of n-bit operands have
     # degree < 2n - 1, so 64 bits hold them for n ≤ 32, 128 bits for n = 64; for n = 128 the three
     # Karatsuba partial products are summed separately (Karatsuba is bilinear) and combined once.
-    @inline clacc_zero(::Type{T}) where {T <: Union{UInt16, UInt32}} = zero(UInt64)
+    @inline clacc_zero(::T) where {T <: Union{UInt16, UInt32}} = zero(UInt64)
     @inline clacc_add(acc::UInt64, a::T, b::T) where {T <: Union{UInt16, UInt32}} =
         acc ⊻ (clmul64_unchecked(a % UInt64, b % UInt64) % UInt64)
-    @inline clacc_reduce(::Type{T}, acc::UInt64) where {T <: Union{UInt16, UInt32}} =
+    @inline clacc_reduce(acc::UInt64, ::T) where {T <: Union{UInt16, UInt32}} =
         poly_reduce((acc >> (8 * sizeof(T))) % T, acc % T)
 
-    @inline clacc_zero(::Type{UInt64}) = zero(UInt128)
+    @inline clacc_zero(::UInt64) = zero(UInt128)
     @inline clacc_add(acc::UInt128, a::UInt64, b::UInt64) = acc ⊻ clmul64_unchecked(a, b)
-    @inline clacc_reduce(::Type{UInt64}, acc::UInt128) =
+    @inline clacc_reduce(acc::UInt128, ::UInt64) =
         poly_reduce((acc >> 64) % UInt64, acc % UInt64)
 
-    @inline clacc_zero(::Type{UInt128}) = (zero(UInt128), zero(UInt128), zero(UInt128))
+    @inline clacc_zero(::UInt128) = (zero(UInt128), zero(UInt128), zero(UInt128))
     @inline function clacc_add(acc::NTuple{3, UInt128}, x::UInt128, y::UInt128)
         x1, x0 = (x >> 64) % UInt64, x % UInt64
         y1, y0 = (y >> 64) % UInt64, y % UInt64
         return (acc[1] ⊻ clmul64_unchecked(x0, y0), acc[2] ⊻ clmul64_unchecked(x1, y1),
                 acc[3] ⊻ clmul64_unchecked(x0 ⊻ x1, y0 ⊻ y1))
     end
-    @inline function clacc_reduce(::Type{UInt128}, acc::NTuple{3, UInt128})
+    @inline function clacc_reduce(acc::NTuple{3, UInt128}, ::UInt128)
         l, h, m = acc
         m ⊻= l ⊻ h
         return poly_reduce(h ⊻ (m >> 64), l ⊻ (m << 64))
@@ -456,17 +457,23 @@ const CLMUL_TILE = (2, 2)
         return Cp
     end
 
+    # One step of the tile: acc[c][r] += a[r] b[c]. A function of its own, so that `acc` is an
+    # argument here: a closure over the loop variable `acc` boxed it (1000 times slower).
+    @inline clacc_tile_add(acc::NTuple{MJ, NTuple{MI, X}}, a::NTuple{MI, T},
+                           b::NTuple{MJ, T}) where {MI, MJ, X, T <: Unsigned} =
+        ntuple(c -> ntuple(r -> clacc_add(acc[c][r], a[r], b[c]), Val(MI)), Val(MJ))
+
     @inline function clmul_tile!(Cp::Matrix{T}, At::Matrix{T}, Bp::Matrix{T},
                                  ks::UnitRange{Int}, i::Int, j::Int, ::Val{MI},
                                  ::Val{MJ}) where {T <: Unsigned, MI, MJ}
-        acc = ntuple(_ -> ntuple(_ -> clacc_zero(T), Val(MI)), Val(MJ))
+        acc = ntuple(_ -> ntuple(_ -> clacc_zero(zero(T)), Val(MI)), Val(MJ))
         @inbounds for k in ks
             a = ntuple(r -> At[k, i + r - 1], Val(MI))
             b = ntuple(c -> Bp[k, j + c - 1], Val(MJ))
-            acc = ntuple(c -> ntuple(r -> clacc_add(acc[c][r], a[r], b[c]), Val(MI)), Val(MJ))
+            acc = clacc_tile_add(acc, a, b)
         end
         @inbounds for c in 1:MJ, r in 1:MI
-            Cp[i + r - 1, j + c - 1] ⊻= clacc_reduce(T, acc[c][r])
+            Cp[i + r - 1, j + c - 1] ⊻= clacc_reduce(acc[c][r], zero(T))
         end
         return nothing
     end
