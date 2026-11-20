@@ -190,7 +190,9 @@ Strategies (`MatMulStrategy`):
   scalar `CLMul` loop. Without `PCLMULQDQ` it computes as `ScalarMatMul(MulTable())`; up to
   GF(256) as `TableMatMul()`.
 
-Defaults (from the measurements below): `TableMatMul` up to GF(256), `CLMulMatMul` from GF(2^16).
+Defaults (from the measurements below): `TableMatMul` up to GF(256), `CLMulMatMul` from GF(2^16),
+for products below the field's `bitsliced_threshold`; from it on (every dimension at least 48 at
+GF(2) … 512 at GF(2^64)) `BitslicedMatMul`, through `BySizeMatMul` (J8g, `bitsliced_matmul.md`).
 
 ### Larger sizes and cache blocking (J8b)
 

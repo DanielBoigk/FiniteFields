@@ -14,33 +14,32 @@ GF(2^128), J2a, J8 (maintainer, 2026-11-19: "please implement J8!"), J8c (2026-1
 kinda want all three"), J8d (2026-11-20: "go with your J8d proposal, fix the GF(2^16)
 slowdown first"), J8e (2026-11-20: "Switch to the tables"), J2b, the default for `inv`
 (2026-11-20: "Please implement the next item!", taken as approval of item 1 of the then "Next"
-list), and **J8b** (2026-11-20: "Please implement the next item!" again, taken the same way).
-Within J8b: packing done, cache blocking measured and not adopted, and now (the fourth "next
-item" of 2026-11-20: "Implement the next item!") the bitsliced matrix product and bitsliced
-vectors at every level. J8b's remaining sub-items are listed under "Next".
-Ask before starting a backlog section the maintainer has not approved.
+list), **J8b** (2026-11-20: "Please implement the next item!" again, taken the same way;
+packing, cache blocking measured, bitsliced matrix product and vectors done, the rest open) and
+**J8g** (2026-11-20: "yes. once you benchmarked it somewhat it should become the default by
+matrix size!"). Ask before starting a backlog section the maintainer has not approved.
 
 ## Done last
 
-- **J8b, bitsliced matrix product — `BitslicedMatMul`** (`src/bitsliced_matmul.jl`, note
-  `src/bitsliced_matmul.md`): a matrix over GF(2^n) as n bit matrices; the nimber recursion on
-  whole bit matrices ($3^K$ GF(2) products, correct because every step is bilinear or linear),
-  each GF(2) product by the Four Russians (eight byte tables per 64 inner indices, 256-bit
-  accumulators). `bench/matmul_sizes.jl compare`, conversions included, from 1024 × 1024:
-  90–170× faster than the default at GF(2) … GF(16), 48× at GF(256), 7–13× at GF(2^16),
-  2.8–3.6× at GF(2^32), 2.1–2.2× at GF(2^64), 2.9× at GF(2^128); slower on small matrices
-  (crossovers 64 … 512 by field). **Not made a default**: proposed as **J8g** (choose by size).
-- **J8b, `BitslicedVector` at GF(2^64) and GF(2^128)** (`src/bulk.md`): the top one or two
-  recursion levels through a scratch buffer, the level-5 circuit unrolled: 2.6 and 7.4 ns per
-  element against 18.4 and 41.8 for the scalar product (scratch run); GF(2^128) packs its
-  64-bit halves separately (6.0 ns per element).
-- **Verified:** `Pkg.test()` passes, 733,010 checks, Julia 1.13.1, x86_64-linux, Aqua and JET
-  included (new: every matrix-product test with `BitslicedMatMul`, block-boundary shapes,
-  linearity, a 300 × 1100 × 70 product at every level, bitsliced vectors at every level with an
-  allocation bound). `bench/matmul_sizes.jl compare` once (the table in the note).
-- **Not verified:** CI (not pushed to `full-ci`); Julia 1.10; ARM; `bench/benchmarks.jl` with the
-  new rows was not run as a whole; the GF(2^64)/GF(2^128) vector numbers come from a scratch
-  script, not from the committed benchmark.
+- **J8g, `BitslicedMatMul` as the default by size.** `default_matmul_strategy(F)` is
+  `BySizeMatMul(TableMatMul() or CLMulMatMul(), BitslicedMatMul(), bitsliced_threshold(F))`:
+  bitsliced when every dimension of the product reaches the threshold, 48 (GF(2), GF(4)), 64
+  (GF(16)), 96 (GF(256)), 192 (GF(2^16)), 256 (GF(2^32)), 512 (GF(2^64)), 384 (GF(2^128)).
+  Measured with the new `bench/matmul_threshold.jl` (square products on a fine grid, then
+  rectangular shapes: with the smallest dimension at the threshold the bitsliced product won in
+  every position, 1.4–20×; with a dimension of 1 or 2 it loses and is not chosen). Details in
+  `src/bitsliced_matmul.md`, "Default by size".
+- **Found on the way:** FF-P2 in `Problems.md`, `CLMulMatMul` is slow for matrix × vector (9–70
+  ns per multiply-add at GF(2^32) … GF(2^128) for 1024 × 1024 times a vector). Pre-existing, not
+  fixed.
+- Before that, in the same session: `BitslicedMatMul` itself and `BitslicedVector` at GF(2^64) and
+  GF(2^128) (J8b; `src/bitsliced_matmul.md`, `src/bulk.md`).
+- **Verified:** `Pkg.test()` passes (733,299 checks), Julia 1.13.1, x86_64-linux, Aqua and
+  JET included; new tests for the choice by size, `*` and `mul!` on both sides of every
+  threshold. `bench/matmul_threshold.jl` once.
+- **Not verified:** CI (not pushed to `full-ci`); a second threshold run (the VM varies up to
+  about 40%, so each threshold is uncertain by one grid step; at GF(2^32) the margin is 1.05×);
+  other CPUs (thresholds measured on one Intel cloud VM); Julia 1.10; ARM.
 
 Earlier: J8b cache blocking (measured, not adopted), J8b packing by bit-matrix transposes, J2b,
 J8e and J8d, J8c, J8, J2a, nimber GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to
@@ -53,12 +52,12 @@ Within the approved J8b (remaining sub-items):
 1. Why inlining both branches of `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
 2. ARM `PMULL` and GPU kernels: need an ARM machine and a GPU; not doable in this container.
 
-Not approved (need the maintainer's go): **J8g** (`BitslicedMatMul` as the default from a
-measured size per field; the measurements suggest it is the largest available speed-up for
-matrix products); **J8f** (fewer carry-less products in `CLMulMatMul`, for the small sizes where
-it stays the default); **FF-P1** (`Problems.md`, `CLMul` at GF(2^64) element by element);
-**J1a/J1b** (Conway representation, arbitrary $n$); **J3** (Itoh–Tsujii, extended Euclid as
-`inv` strategies); linear algebra on the matrix products (V5).
+Not approved (need the maintainer's go): **FF-P2** (a matrix × vector path for `CLMulMatMul`);
+**J8f** (fewer carry-less products in `CLMulMatMul`, which is now the default only below the
+bitsliced thresholds); faster small bitsliced products (preallocated temporaries, a
+`BitslicedMatrix` type keeping the planes; would lower the thresholds); **FF-P1** (`CLMul` at
+GF(2^64) element by element); **J1a/J1b** (Conway representation, arbitrary $n$); **J3**
+(Itoh–Tsujii, extended Euclid as `inv` strategies); linear algebra on the matrix products (V5).
 
 ## Decisions in force (maintainer, 2026-11-19)
 

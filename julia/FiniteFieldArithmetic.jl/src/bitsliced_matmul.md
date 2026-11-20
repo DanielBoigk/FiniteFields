@@ -3,7 +3,8 @@
 > The bitsliced matrix product (backlog J8b): a matrix over $\mathbb{F}_{2^n}$ as $n$ bit
 > matrices, the product as the nimber recursion on whole bit matrices ($3^K$ products over
 > $\mathbb{F}_2$ at $\mathbb{F}_{2^{2^K}}$), each by the method of the Four Russians.
-> `BitslicedMatMul()`, a `MatMulStrategy` beside `CLMulMatMul`; not a default (proposal below).
+> `BitslicedMatMul()`, a `MatMulStrategy`; **the default for products whose every dimension
+> reaches a measured size per field** (`BySizeMatMul`, J8g), 48 at GF(2) … 512 at GF(2^64).
 
 > Sources: T. J. Boothby, R. W. Bradshaw, "Bitslicing and the Method of Four Russians Over Larger
 > Finite Fields", arXiv:0901.1413 (2009) (the representation and the idea, there with polynomial
@@ -15,7 +16,8 @@
 > relied on: correctness rests on the tests below.
 > code: `src/bitsliced_matmul.jl`; the plane recursion and packing in `src/bulk.jl`.
 > tests: `test/bulk.jl` ("BitslicedMatMul, …" and every matrix-product test), `test/jet.jl`.
-> benchmarks: `bench/matmul_sizes.jl compare`, `bench/benchmarks.jl` (groups `matmul <field>`).
+> benchmarks: `bench/matmul_sizes.jl compare`, `bench/matmul_threshold.jl`, `bench/benchmarks.jl`
+> (groups `matmul <field>`).
 
 ## Why it works
 
@@ -100,15 +102,52 @@ crossovers are uncertain by one size step; the large ratios are not.
 
 Bitsliced vectors at GF(2^64) and GF(2^128), which this note's code shares: `bulk.md`.
 
-## Proposal (not adopted)
+## Default by size (J8g)
 
-`default_matmul_strategy(F)` depends only on the field, so `BitslicedMatMul` could only become a
-default for every size, and it loses on small matrices. Proposed as **J8g** (Backlog): choose
-the strategy by the size of the product, `BitslicedMatMul` from the crossovers above (measured
-again with a stricter rule, like `mulby_threshold`), the present defaults below them. Smaller
-improvements that would lower the crossovers: preallocated temporaries for the recursion, fewer
-or narrower tables when the left factor has few rows, and a `BitslicedMatrix` type that keeps
-the planes between products. Not done: changing defaults is the maintainer's decision.
+Approved by the maintainer on 2026-11-20 ("once you benchmarked it somewhat it should become the
+default by matrix size"). `default_matmul_strategy(F)` is now
+`BySizeMatMul(small, BitslicedMatMul(), bitsliced_threshold(F))`, with `small` the previous
+default (`TableMatMul` up to GF(256), `CLMulMatMul` above). `BySizeMatMul` uses `BitslicedMatMul`
+when **every** dimension of an $m \times p$ times $p \times q$ product (a vector: $q = 1$) is at
+least the threshold (`choose_matmul`). The two branches are two concrete calls, so the choice is
+type-stable. `*` and `mul!` follow the default, `matmul!` takes any strategy.
+
+`bench/matmul_threshold.jl`, 2026-11-20, same VM and conventions as above (minimum of 5 runs,
+conversions included, ns per multiply-add). Square products on a finer grid (excerpt; full output
+12 sizes from 16 to 768 per field):
+
+| field | n | before | bitsliced | n | before | bitsliced | threshold |
+|---|---|---|---|---|---|---|---|
+| GF(2) | 32 | **0.400** | 0.487 | 48 | 0.403 | **0.149** | **48** |
+| GF(4) | 32 | **0.574** | 0.957 | 48 | 0.559 | **0.313** | **48** |
+| GF(16) | 48 | **0.659** | 0.706 | 64 | 0.682 | **0.312** | **64** |
+| GF(256) | 64 | **0.703** | 0.842 | 96 | 0.654 | **0.338** | **96** |
+| GF(2^16) | 128 | **0.308** | 0.436 | 192 | 0.306 | **0.173** | **192** |
+| GF(2^32) | 192 | **0.336** | 0.508 | 256 | 0.310 | **0.296** | **256** |
+| GF(2^64) | 384 | **0.579** | 0.728 | 512 | 0.689 | **0.489** | **512** |
+| GF(2^128) | 256 | **2.61** | 3.01 | 384 | 3.10 | **2.27** | **384** |
+
+The threshold is the smallest grid size from which the bitsliced product was faster at that and
+every larger size. It agrees with the coarser grid of "Measurements" (64 / 128 / 256 / 256 / 512
+there) except at GF(2^128), where 384 was not on that grid (256 a tie there, 0.87 here). At
+GF(2^32) the margin at the threshold is small (1.05 here, 1.19 in the other run).
+
+**Rectangular products** (smallest dimension $t$ = threshold, the other two $4t$, at most 1024):
+the bitsliced product won with the small dimension in every position, 13–20 times at GF(2),
+7.7–14 at GF(16), 9–10 at GF(256), 3.7–6.1 at GF(2^16), 1.4–2.9 at GF(2^32), 1.5–1.7 at
+GF(2^64), 1.9–2.1 at GF(2^128). With the small dimension at $t/2$ it still won in 23 of 24
+cases (the exception: GF(2^32), $128 \times 1024 \times 1024$, 0.91), so the rule leaves some
+speed unused on flat products but did not pick the slower strategy in any measured case. With a
+dimension of 2 or 1 (matrix × vector) it lost everywhere except $2 \times p \times q$ at
+GF(2) … GF(16) (a 256-column word and a table per 64 inner indices for two rows, against a
+`TableMatMul` that is worst with two rows), and the rule keeps the old strategy there. A rule
+with one threshold per dimension would capture both observations; not done, one threshold is
+simpler and safe on these measurements.
+
+Observed on the way (not part of J8g): `CLMulMatMul` is slow for matrix × vector, 9.0 ns per
+multiply-add at GF(2^32) and 70 at GF(2^128) for $1024 \times 1024$ times a vector, against 0.3
+and 3 for square products, because it converts the whole matrix for a single column. Recorded
+as FF-P2 in `Problems.md`.
 
 ## What it does not do
 
@@ -117,9 +156,9 @@ the planes between products. Not done: changing defaults is the maintainer's dec
 - Temporaries are allocated at every node of the recursion (about $3^K$ allocations); this is what
   makes small products slow, together with the table set-up per 64 inner indices.
 - No Strassen–Winograd on top (M4RI uses it for large GF(2) products); not tried.
-- Only `matmul!` with this strategy; the planes are not exposed as a matrix type, so a product
-  converts its factors every time (a `BitslicedMatrix` type, like `BitslicedVector`, would keep
-  them).
+- The planes are not exposed as a matrix type, so a product converts its factors every time (a
+  `BitslicedMatrix` type, like `BitslicedVector`, would keep them).
+- Thresholds from one run on one VM, by square products; one threshold for all three dimensions.
 - Not constant time (J6, not a goal).
 
 ## Difficulties met

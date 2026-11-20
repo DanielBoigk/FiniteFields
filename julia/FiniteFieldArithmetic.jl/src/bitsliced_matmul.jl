@@ -58,10 +58,13 @@ The size from which the default matrix product over `F` is [`BitslicedMatMul`](@
 dimension of the product at least this. Measured with `bench/matmul_threshold.jl`
 (`src/bitsliced_matmul.md`, "Default by size").
 """
-bitsliced_threshold(::Type{<:Nimber}) = 64
-bitsliced_threshold(::Type{GF256}) = 128
-bitsliced_threshold(::Type{<:Union{GF2_16, GF2_32}}) = 256
-bitsliced_threshold(::Type{<:Union{GF2_64, GF2_128}}) = 512
+bitsliced_threshold(::Type{<:Union{GF2, GF4}}) = 48
+bitsliced_threshold(::Type{GF16}) = 64
+bitsliced_threshold(::Type{GF256}) = 96
+bitsliced_threshold(::Type{GF2_16}) = 192
+bitsliced_threshold(::Type{GF2_32}) = 256
+bitsliced_threshold(::Type{GF2_64}) = 512
+bitsliced_threshold(::Type{GF2_128}) = 384
 
 """
     default_matmul_strategy(F)

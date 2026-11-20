@@ -20,3 +20,17 @@ Do not use this log as a substitute for feature planning; planned work belongs i
   makes it unclear how much is real: one run of the bare variant also took 18 ns.
 - **Consequence:** GF(2^64) keeps `MulTable` as default. Investigate on a quiet machine
   (`code_llvm` of the whole broadcast loop, `perf`), then reconsider the default.
+
+## FF-P2 — `CLMulMatMul` is slow for matrix × vector (open, 2026-11-20)
+
+- **Where:** `julia/FiniteFieldArithmetic.jl/src/bulk.jl`, `matmul_add!(::CLMulMatMul, …)`, the
+  default for `A * x` above GF(256) (below the bitsliced threshold, which a vector never reaches).
+- **Reproduction:** `bench/matmul_threshold.jl`, rows `… × 1`: $1024 \times 1024$ times a vector
+  takes 9.0 ns per multiply-add at GF(2^32), 17.5 at GF(2^64), 70 at GF(2^128), against 0.3, 0.6
+  and 3 per multiply-add for square products.
+- **Expected:** about the cost of a square product per multiply-add.
+- **Actual:** the conversion of all of $A$ to the polynomial basis (and $A$ transposed) is paid
+  for one column; for a vector it costs more than the products. (An explanation from the code,
+  not profiled.)
+- **Consequence:** none for correctness. Options: a matrix × vector path without converting $A$
+  (scalar `CLMul` products, or `MulBy`-style tables of the vector entries), chosen by $q$.

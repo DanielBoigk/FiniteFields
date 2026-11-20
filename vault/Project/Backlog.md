@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J2a, J2b, J8, J8b, J8c, J8d, J8e); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J2a, J2b, J8, J8b, J8c, J8d, J8e, J8g); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -100,14 +100,6 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
   measurement, the bitsliced matrix product and bitsliced vectors at every level done, see
   *Done*): ARM `PMULL`; GPU kernels (needs a GPU to test); why inlining both branches of
   `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
-- **J8g — `BitslicedMatMul` as a default by size** (proposed 2026-11-20, not approved):
-  `default_matmul_strategy` depends only on the field; `BitslicedMatMul` wins from 64 × 64 at
-  GF(2) … GF(16), 128 at GF(256), 256 at GF(2^16) and GF(2^32), 512 at GF(2^64) and GF(2^128)
-  (up to 170× at GF(4), 2–3× at GF(2^64) and GF(2^128) from 1024), and loses on smaller matrices
-  (`src/bitsliced_matmul.md`, "Measurements", "Proposal"). Choose it by the size of the product, with
-  thresholds measured like `mulby_threshold`. Possibly with a `BitslicedMatrix` type that keeps
-  the planes between products, and a faster small-size path (preallocated temporaries, smaller
-  tables).
 - **J8f — Fewer carry-less products in `CLMulMatMul`** (proposed 2026-11-20, not approved): the
   matrix product is bound by `PCLMULQDQ` throughput, not by the caches (`src/bulk.md`, "Larger
   sizes and cache blocking"). Two terms per 64-bit product at GF(2^16) ($a_1 + a_2x^{32}$ times
@@ -142,10 +134,16 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   and `/`; `LogTable16` at GF(2^16) (2.7× throughput, less latency) and GF(2^32) (1.4–1.9×
   throughput, 20–50% more latency: chosen for throughput, confirmed by the maintainer 2026-11-20), as `*`
   elsewhere. `inv latency` benchmarks added. Details in `src/nimber_fast.md`, "Default for inv".
+- **J8g — `BitslicedMatMul` as the default by size** (approved and done 2026-11-20):
+  `default_matmul_strategy(F)` is `BySizeMatMul(previous default, BitslicedMatMul(), t)`, the
+  bitsliced product when every dimension is at least `t = bitsliced_threshold(F)`: 48 (GF(2),
+  GF(4)), 64, 96, 192, 256, 512 (GF(2^64)), 384 (GF(2^128)), from `bench/matmul_threshold.jl`;
+  rectangular shapes checked. Details in `src/bitsliced_matmul.md`, "Default by size". Found on
+  the way: FF-P2 (`CLMulMatMul` slow for matrix × vector).
 - **J8b, bitsliced matrix product and bitsliced vectors at every level** (2026-11-20):
   `BitslicedMatMul` (the nimber recursion on bit matrices, $3^K$ GF(2) products by the Four
-  Russians), 48–170× faster at GF(2) … GF(256) and 2–13× above from 1024 × 1024; not a
-  default (J8g proposed). `BitslicedVector` at GF(2^64) and GF(2^128) (top
+  Russians), 48–170× faster at GF(2) … GF(256) and 2–13× above from 1024 × 1024; the
+  default from a size per field since J8g. `BitslicedVector` at GF(2^64) and GF(2^128) (top
   recursion levels through a scratch buffer): 7.1× and 5.6× the scalar product. Details in
   `src/bitsliced_matmul.md` and `src/bulk.md`.
 - **J8b, cache blocking — measured, not adopted** (2026-11-20): `bench/matmul_sizes.jl` (64 …
