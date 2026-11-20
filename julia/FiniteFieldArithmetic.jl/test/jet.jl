@@ -26,6 +26,8 @@ using JET, Test
             @test_opt inverse(s, x)
         end
         @test_opt x^7
+        @test_opt inv(x)
+        @test_opt x / y
     end
     # bulk operations (J8)
     for F in (GF256, GF2_16, GF2_32, GF2_64, GF2_128)

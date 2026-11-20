@@ -4,7 +4,8 @@
 #
 # - throughput: element-wise products of two arrays of N random elements (the bulk case, e.g.
 #   learners), reported per element;
-# - latency: a chain of N dependent products x ← x * y (each waits for the previous one);
+# - latency: a chain of N dependent products x ← x * y (each waits for the previous one), and of
+#   N dependent inverses x ← inv(x) + y;
 # - baselines: XOR (field addition) and UInt8 integer multiplication over the same arrays.
 
 using BenchmarkTools, Random
@@ -22,6 +23,14 @@ const GROUP_SIZE = Dict{String, Int}("GF256" => N, (name => N_LARGE for (name, _
 function chain(s, x, y, n)
     for _ in 1:n
         x = mul(s, x, y) + y        # "+ y" keeps x from collapsing to 0 or a short cycle
+    end
+    return x
+end
+
+function inv_chain(f, x, y, n)
+    for _ in 1:n
+        x = f(x) + y
+        iszero(x) && (x = y)        # keep x invertible; taken almost never
     end
     return x
 end
@@ -56,7 +65,10 @@ let rng = Xoshiro(2026)
             g["mul throughput", sname] = @benchmarkable broadcast!((x, y) -> mul($s, x, y), $c, $a, $b)
             g["inv throughput", sname] = @benchmarkable broadcast!(x -> inverse($s, x), $c, $nz)
             g["mul latency", sname] = @benchmarkable chain($s, $(a[1]), $(b[1]), N_LARGE)
+            g["inv latency", sname] = @benchmarkable inv_chain(x -> inverse($s, x), $(nz[1]), $(nz[2]), N_LARGE)
         end
+        g["inv throughput", "default (inv)"] = @benchmarkable broadcast!(inv, $c, $nz)
+        g["inv latency", "default (inv)"] = @benchmarkable inv_chain(inv, $(nz[1]), $(nz[2]), N_LARGE)
         g["baseline", "add (XOR)"] = @benchmarkable broadcast!(+, $c, $a, $b)
         g["baseline", "integer *"] = @benchmarkable broadcast!(*, $uc, $ua, $ub)
     end
