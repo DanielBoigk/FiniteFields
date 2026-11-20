@@ -17,6 +17,9 @@ constant), matrix products ([`matmul!`](@ref) with a [`MatMulStrategy`](@ref), a
 `LinearAlgebra.mul!` use [`default_matmul_strategy`](@ref)), [`BitslicedVector`](@ref), and the
 strategies of `c .* a` ([`ConstMulStrategy`](@ref), chosen by [`default_constmul_strategy`](@ref)).
 
+The smallest field of an element (`src/subfield.md`): [`minimal_level`](@ref),
+[`minimal_degree`](@ref), [`reduce_field`](@ref).
+
 Type stability of the arithmetic is enforced by DispatchDoctor's `@stable` (mode `"error"`); set
 the preference `instability_check = "disable"` for this package to switch the checks off.
 """
@@ -28,6 +31,7 @@ using Random: Random
 
 export BinaryFieldElement, Nimber, GF2, GF4, GF16, GF256, GF2_16, GF2_32, GF2_64, GF2_128
 export characteristic, degree, elements
+export minimal_level, minimal_degree, reduce_field
 export MulBy, BitslicedVector
 
 include("binaryfield.jl")
@@ -35,5 +39,6 @@ include("nimber.jl")
 include("nimber_fast.jl")
 include("bulk.jl")
 include("bitsliced_matmul.jl")
+include("subfield.jl")
 
 end

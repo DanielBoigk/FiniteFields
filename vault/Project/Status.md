@@ -17,31 +17,28 @@ slowdown first"), J8e (2026-11-20: "Switch to the tables"), J2b, the default for
 list), **J8b** (2026-11-20: "Please implement the next item!" again, taken the same way;
 packing, cache blocking measured, bitsliced matrix product and vectors done, the rest open) and
 **J8g** (2026-11-20: "yes. once you benchmarked it somewhat it should become the default by
-matrix size!") and **FF-P2** (2026-11-20: "Go ahead with it!"). Ask before starting a backlog
+matrix size!"), **FF-P2** (2026-11-20: "Go ahead with it!") and **J9** (2026-11-20: asked "What
+is the next item? Please implement!", then chose J9 when asked which). Ask before starting a backlog
 section the maintainer has not approved.
 
 ## Done last
 
-- **FF-P2, `CLMulMatMul` for matrix × vector** (maintainer, 2026-11-20: "Go ahead with it!",
-  finished after "Yes do so!"). A column-wise path that reads $A$ in storage order without
-  transposing it (`clmul_columns_add!`), chosen by `clmul_by_columns(F, m, p, q)`: a vector when
-  $A \ge$ 512 KiB, two columns when $A \ge$ 4 MiB and $m, p \ge 256$. The first plan, a rule on
-  the number of columns per field (`clmul_column_max`), was dropped: `bench/matvec.jl` showed the
-  crossover depends on the size of $A$, and for small $A$ the transposed path is as fast or faster
-  even for a vector. $1024 \times 1024$ times a vector: 9.0 / 17.5 / 70 → 1.05 / 2.94 / 14.9 ns
-  per multiply-add at GF(2^32) / GF(2^64) / GF(2^128). Two bugs in the work-in-progress commit,
-  fixed: `poly_acc_reduce(acc, ::Type{T})` under `@stable` dispatched at runtime per row
-  (938 kB allocated per 512 × 512 product), and `poly_acc_zero` was a union for JET. Details in
-  `src/bulk.md`, "Matrix × vector".
-- **Verified:** `Pkg.test()` passes (733,769 checks, Julia 1.13.1, x86_64-linux);
-  `bench/matvec.jl` and `bench/matvec.jl sizes` (single runs); `mul!(y, A, x)` end to end once.
-- **Not verified:** CPUs with other cache sizes (the thresholds are this VM's); a CPU without
-  `PCLMULQDQ`; other Julia versions; CI. One run at GF(2^64) $128 \times 128$ (5.65 ns, transposed
-  path) was slower than the sweep's 3.0–3.1 and was not repeated.
+- **J9, the smallest field of an element (nimbers)**: `minimal_level`, `minimal_degree`,
+  `reduce_field` (exported) in `src/subfield.jl`, note `src/subfield.md`, benchmark
+  `bench/subfield.jl`. All from the bit length, since every subfield of
+  $\mathbb{F}_{2^{2^K}}$ is a nimber level. `reduce_field` is type-unstable (allowed by the
+  maintainer); one branch per level made it 3.5–4.7 ns per element instead of 180–205 ns when
+  it built `Nimber{j, S}` at runtime. The other representations are J9b (after J1a/J1b/J7).
+- **Verified:** `Pkg.test()` passes (947,134 checks, Julia 1.13.1, x86_64-linux), including the
+  Frobenius oracle on every element of GF(2) … GF(2^16), JET `@test_opt` on `minimal_level` and
+  `minimal_degree`; `bench/subfield.jl` (single run).
+- **Not verified:** other Julia versions; CI; the jldoctest in `minimal_degree`'s docstring
+  (no Documenter run; checked by hand: 0x1b has 5 bits, level 3, degree 8).
 
-Before that: J8b, why inlining both branches of `LazyMulBy`'s `copyto!` slowed the loop (LLVM's
-loop unswitching; `bench/constmul_inline.jl`); J8g (`BitslicedMatMul` the default by size); the
-bitsliced matrix product and vectors at GF(2^64)/GF(2^128).
+Before that: FF-P2, `CLMulMatMul` for matrix × vector (a column-wise path chosen by the size of
+$A$, `src/bulk.md`, "Matrix × vector"); J8b, why inlining both branches of `LazyMulBy`'s
+`copyto!` slowed the loop; J8g (`BitslicedMatMul` the default by size); the bitsliced matrix
+product and vectors at GF(2^64)/GF(2^128).
 Earlier: J8b cache blocking (measured, not adopted), J8b packing by bit-matrix transposes, J2b,
 J8e and J8d, J8c, J8, J2a, nimber GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to
 MathStruct. Details in git and the Backlog's *Done*.
@@ -57,8 +54,8 @@ unnecessary and help small $q \ge 3$; an expectation, `src/bulk.md`); faster sma
 products (preallocated temporaries, a `BitslicedMatrix` type keeping the planes; would lower the
 thresholds); **FF-P1** (`CLMul` at GF(2^64) element by element); **J1a/J1b** (Conway
 representation, arbitrary $n$); **J3** (Itoh–Tsujii, extended Euclid as `inv` strategies);
-linear algebra on the matrix products (V5); **J9** (`minimal_level`, `minimal_degree`,
-`reduce_field`; for nimbers from the bit length, `reduce_field` may be type-unstable). Seen earlier, not measured: in the scalar GF(2^16)
+linear algebra on the matrix products (V5); **J9b** (smallest field for Conway and polynomial
+representations, after J1a/J1b/J7). Seen earlier, not measured: in the scalar GF(2^16)
 `LazyMulBy` loop the size of the global `NIM256_MUL` table is reloaded every element.
 
 ## Decisions in force (maintainer, 2026-11-19)

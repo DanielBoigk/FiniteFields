@@ -110,16 +110,10 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
   tables). Exact, not fast; sizes grow with the lcm. The nimber quadratic closure (all
   $2^{2^k}$) is the cheap special case. After J1–J3. Lean counterpart:
   `AlgebraicClosure (ZMod 2)`.
-- **J9 — Smallest field of an element** (proposed 2026-11-20, not approved): `minimal_level(x)`,
-  `minimal_degree(x)` $= [\mathbb{F}_2(x) : \mathbb{F}_2]$ and `reduce_field(x)` (the element
-  in the smallest field that contains it). For nimbers no field arithmetic is needed: every
-  subfield of $\mathbb{F}_{2^{2^K}}$ is some $\mathbb{F}_{2^{2^j}}$, which is a nimber level, nested
-  as integers, so the smallest level is the smallest $j$ with $x < 2^{2^j}$ (from the bit length).
-  `reduce_field` returns a type that depends on the value: the maintainer allows it to be
-  type-unstable and outside DispatchDoctor's `@stable` (2026-11-20). For Conway and polynomial
-  representations (J1a, J1b) and $\overline{\mathbb{F}}_2$ (J7): the smallest $d$ with
-  $x^{2^d} = x$, then the map down to $\mathbb{F}_{2^d}$ through the Conway compatibility; after
-  those sections. Tests first, as usual.
+- **J9b — Smallest field for the other representations** (after J1a, J1b, J7; the nimber part,
+  J9, is done): `minimal_degree` as the smallest $d \mid n$ with $x^{2^d} = x$, and
+  `reduce_field` as the map down to $\mathbb{F}_{2^d}$ through the Conway compatibility. Tests
+  first, with the Frobenius oracle of `test/subfield.jl`.
 
 ## Sorry ledger
 
@@ -130,6 +124,13 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
 
 ## Done
 
+- **J9 — Smallest field of an element, nimbers** (approved and done 2026-11-20):
+  `minimal_level(x)`, `minimal_degree(x)` $= [\mathbb{F}_2(x) : \mathbb{F}_2]$ and
+  `reduce_field(x)`, from the bit length (every subfield of $\mathbb{F}_{2^{2^K}}$ is a nimber
+  level). `minimal_level` 0.1–0.6 ns, `@stable`; `reduce_field` type-unstable by the maintainer's
+  choice, 3.5–4.7 ns with one branch per level (180–205 ns when the type was built at runtime).
+  Tested against the Frobenius oracle ($x^{2^d} = x$) on all of GF(2) … GF(2^16) and random
+  elements above. Details in `src/subfield.md`; other representations: J9b.
 - **J0 — `FiniteFieldArithmetic.jl` skeleton** (2026-11-19): tests first, Aqua, JET, DispatchDoctor,
   `bench/` suite and profile script, implementation notes; CI tests Julia `1` and `min`.
 - **J1 — nimber fields GF(2) … GF(2^128)** (2026-11-19): `Nimber{0..7}` in the smallest fitting
