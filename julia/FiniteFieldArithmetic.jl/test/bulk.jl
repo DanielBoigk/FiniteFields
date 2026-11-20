@@ -161,3 +161,31 @@ end
 @testset "BitslicedVector is limited to GF(2^32)" begin
     @test_throws ArgumentError BitslicedVector(zeros(GF2_64, 3))
 end
+
+# --- J8b: packing by bit-matrix transposes (src/bulk.md, "Bitsliced vectors") ----------------
+#
+# Oracle: the transpose read off bit by bit.
+
+using FiniteFieldArithmetic: transpose64!
+
+@testset "64 × 64 bit-matrix transpose" begin
+    getbit(x, r, c) = (x[r + 1] >> c) & 1
+    for x0 in (rand(rng, UInt64, 64), zeros(UInt64, 64), fill(typemax(UInt64), 64),
+               [UInt64(1) << r for r in 0:63], [UInt64(1) << (63 - r) for r in 0:63])
+        x = copy(x0)
+        @test transpose64!(x) === x
+        @test all(getbit(x, r, c) == getbit(x0, c, r) for r in 0:63, c in 0:63)
+        @test transpose64!(x) == x0                         # an involution
+    end
+end
+
+@testset "packing from other vectors, $F" for F in (GF2, GF16, GF256, GF2_16, GF2_32)
+    a = samples(F, 300)
+    @test Vector(BitslicedVector(view(a, 5:250))) == a[5:250]
+    @test Vector(BitslicedVector(view(a, 300:-3:1))) == a[300:-3:1]
+    P = BitslicedVector(a)
+    @test all(P[i] == a[i] for i in eachindex(a))            # getindex agrees with unpacking
+    @test (BitslicedVector(a); @allocated BitslicedVector(a)) <= 2 * sizeof(P.planes) + 1024
+    out = similar(a, length(a))
+    @test (Vector(P); @allocated Vector(P)) <= 2 * sizeof(out) + 1024
+end
