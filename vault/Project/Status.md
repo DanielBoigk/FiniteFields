@@ -54,8 +54,9 @@ unnecessary and help small $q \ge 3$; an expectation, `src/bulk.md`); faster sma
 products (preallocated temporaries, a `BitslicedMatrix` type keeping the planes; would lower the
 thresholds); **FF-P1** (`CLMul` at GF(2^64) element by element); **J1a/J1b** (Conway
 representation, arbitrary $n$); **J3** (Itoh–Tsujii, extended Euclid as `inv` strategies);
-linear algebra on the matrix products (V5); **J9b** (smallest field for Conway and polynomial
-representations, after J1a/J1b/J7). Seen earlier, not measured: in the scalar GF(2^16)
+linear algebra on the matrix products (V5); **J9b** (smallest field for Conway fields $\mathbb{F}_{2^k}$:
+the integer `minimal_degree` or the smallest field type via `reduce_field`; with or after
+J1a/J1b, requested by the maintainer 2026-11-20). Seen earlier, not measured: in the scalar GF(2^16)
 `LazyMulBy` loop the size of the global `NIM256_MUL` table is reloaded every element.
 
 ## Decisions in force (maintainer, 2026-11-19)

@@ -110,10 +110,22 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
   tables). Exact, not fast; sizes grow with the lcm. The nimber quadratic closure (all
   $2^{2^k}$) is the cheap special case. After J1–J3. Lean counterpart:
   `AlgebraicClosure (ZMod 2)`.
-- **J9b — Smallest field for the other representations** (after J1a, J1b, J7; the nimber part,
-  J9, is done): `minimal_degree` as the smallest $d \mid n$ with $x^{2^d} = x$, and
-  `reduce_field` as the map down to $\mathbb{F}_{2^d}$ through the Conway compatibility. Tests
-  first, with the Frobenius oracle of `test/subfield.jl`.
+- **J9b — Smallest field for the Conway representation and the others** (requested by the
+  maintainer 2026-11-20, to be implemented with or after J1a/J1b; $\overline{\mathbb{F}}_2$ after
+  J7; the nimber part, J9, is done): for an element `x` of a Conway field $\mathbb{F}_{2^k}$ (any
+  $k$, not only powers of two), the caller can ask for either
+  - the **integer** `minimal_degree(x)` $= d = [\mathbb{F}_2(x) : \mathbb{F}_2]$, the smallest
+    $d \mid k$ with $x^{2^d} = x$ (type-stable), or
+  - the **smallest containing field type**: `reduce_field(x)`, `x` as an element of the Conway
+    field $\mathbb{F}_{2^d}$ (its type depends on the value, so type-unstable as for nimbers),
+    through the Conway compatibility: $x$ is written in powers of
+    $\beta = \alpha_k^{(2^k-1)/(2^d-1)}$, which the compatibility of Conway polynomials identifies
+    with the generator $\alpha_d$ of $\mathbb{F}_{2^d}$.
+
+  `minimal_level` has no Conway counterpart unless $k$ is a power of two. The divisors of $k$ can
+  be tried from the smallest (or the largest proper ones ruled out first); measure which.
+  Tests first, with the Frobenius oracle of `test/subfield.jl`; for $k = 2^j$, also cross-checked
+  against the nimber results through the isomorphism of J1a.
 
 ## Sorry ledger
 
