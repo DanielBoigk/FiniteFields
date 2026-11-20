@@ -15,6 +15,67 @@ small fields; measurements in `src/bitsliced_matmul.md`.
 """
 struct BitslicedMatMul <: MatMulStrategy end
 
+"""
+    BySizeMatMul(small::MatMulStrategy, large::MatMulStrategy, threshold::Int)
+
+Computes with `large` when every dimension of the product (``m``, ``p``, ``q`` for an
+``m \\times p`` times ``p \\times q`` product; ``q = 1`` for a vector) is at least `threshold`,
+with `small` otherwise ([`choose_matmul`](@ref)). The default strategies are of this kind
+([`default_matmul_strategy`](@ref)).
+"""
+struct BySizeMatMul{S <: MatMulStrategy, L <: MatMulStrategy} <: MatMulStrategy
+    small::S
+    large::L
+    threshold::Int
+    function BySizeMatMul(small::S, large::L, threshold::Integer) where {S, L}
+        threshold >= 1 || throw(ArgumentError("BySizeMatMul: threshold must be ≥ 1, got $threshold"))
+        return new{S, L}(small, large, threshold)
+    end
+end
+
+"""
+    choose_matmul(s::BySizeMatMul, m, p, q) -> MatMulStrategy
+
+The strategy `s` uses for an ``m \\times p`` times ``p \\times q`` product: `s.large` if
+``\\min(m, p, q) \\ge`` `s.threshold`, else `s.small`.
+"""
+choose_matmul(s::BySizeMatMul, m::Integer, p::Integer, q::Integer) =
+    min(m, p, q) >= s.threshold ? s.large : s.small
+
+function matmul_add!(s::BySizeMatMul, C::StridedVecOrMat{N}, A::StridedMatrix{N},
+                     B::StridedVecOrMat{N}) where {N <: Nimber}
+    if min(size(A, 1), size(A, 2), size(B, 2)) >= s.threshold   # two concrete calls, no Union
+        return matmul_add!(s.large, C, A, B)
+    else
+        return matmul_add!(s.small, C, A, B)
+    end
+end
+
+"""
+    bitsliced_threshold(F)
+
+The size from which the default matrix product over `F` is [`BitslicedMatMul`](@ref): every
+dimension of the product at least this. Measured with `bench/matmul_threshold.jl`
+(`src/bitsliced_matmul.md`, "Default by size").
+"""
+bitsliced_threshold(::Type{<:Nimber}) = 64
+bitsliced_threshold(::Type{GF256}) = 128
+bitsliced_threshold(::Type{<:Union{GF2_16, GF2_32}}) = 256
+bitsliced_threshold(::Type{<:Union{GF2_64, GF2_128}}) = 512
+
+"""
+    default_matmul_strategy(F)
+
+The [`MatMulStrategy`](@ref) behind `*` and `LinearAlgebra.mul!` for matrices over `F`: a
+[`BySizeMatMul`](@ref) with [`BitslicedMatMul`](@ref) from [`bitsliced_threshold`](@ref)`(F)`
+on, and below it [`TableMatMul`](@ref) up to ``\\mathbb{F}_{256}``, [`CLMulMatMul`](@ref) above.
+Chosen by the benchmarks in `bench/` (`src/bulk.md`, `src/bitsliced_matmul.md`).
+"""
+default_matmul_strategy(::Type{F}) where {F <: Nimber} =
+    BySizeMatMul(small_matmul_strategy(F), BitslicedMatMul(), bitsliced_threshold(F))
+small_matmul_strategy(::Type{<:Nimber}) = TableMatMul()
+small_matmul_strategy(::Type{<:Union{GF2_16, GF2_32, GF2_64, GF2_128}}) = CLMulMatMul()
+
 # Layouts. A *left* bit-matrix array `L::Array{UInt64, 3}` of size (nw, rows, planes): `L[w, i, j]`
 # holds bit j - 1 of the entries in row i, columns 64(w - 1) + 1 … 64w (column c at bit c - 1 of
 # its word). A *right* array `R::Array{Word4, 3}` of size (nc, rows, planes): the same with 256

@@ -245,6 +245,9 @@ result:
 - [`TableMatMul`](@ref): multiplication-by-constant tables ([`MulBy`](@ref)) per entry of `B`.
 - [`CLMulMatMul`](@ref): carry-less products in the polynomial basis with one reduction per
   entry of the result.
+- [`BitslicedMatMul`](@ref): ``n`` bit matrices and ``3^K`` products over ``\\mathbb{F}_2``.
+- [`BySizeMatMul`](@ref): one of two strategies, chosen by the size of the product (the
+  defaults).
 """
 abstract type MatMulStrategy end
 
@@ -280,14 +283,7 @@ Needs `PCLMULQDQ` ([`has_pclmul`](@ref)); without it it computes as
 """
 struct CLMulMatMul <: MatMulStrategy end
 
-"""
-    default_matmul_strategy(F)
-
-The [`MatMulStrategy`](@ref) behind `*` and `LinearAlgebra.mul!` for matrices over `F`, chosen by
-the benchmarks in `bench/` (`src/bulk.md`, "Measurements").
-"""
-default_matmul_strategy(::Type{<:Nimber}) = TableMatMul()
-default_matmul_strategy(::Type{<:Union{GF2_16, GF2_32, GF2_64, GF2_128}}) = CLMulMatMul()
+# `default_matmul_strategy` is defined in bitsliced_matmul.jl (J8g: chosen by size).
 
 """
     matmul!(strategy::MatMulStrategy, C, A, B) -> C
