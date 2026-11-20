@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J2a, J2b, J8, J8c, J8d, J8e); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J2a, J2b, J8, J8b, J8c, J8d, J8e); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -96,8 +96,8 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
 - **J6 — Constant time:** not a goal. Document which strategies happen to be constant-time; do not
   engineer for it.
-- **J8b — Bulk, remaining** (after J8): faster packing of `BitslicedVector`s (bit-matrix
-  transposes); bitsliced vectors above GF(2^32) and a bitsliced matrix product; cache blocking of
+- **J8b — Bulk, remaining** (after J8; approved 2026-11-20, packing done, see *Done*):
+  bitsliced vectors above GF(2^32) and a bitsliced matrix product; cache blocking of
   the matrix products; ARM `PMULL`; GPU kernels (needs a GPU to test); why inlining both branches of `LazyMulBy`'s
   `copyto!` slowed the loop (J8d, not inspected).
 - **J7 — $\overline{\mathbb{F}}_2$ ("$n = \infty$"):** every element lives in some finite
@@ -129,6 +129,10 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   and `/`; `LogTable16` at GF(2^16) (2.7× throughput, less latency) and GF(2^32) (1.4–1.9×
   throughput, 20–50% more latency: chosen for throughput, maintainer to confirm), as `*`
   elsewhere. `inv latency` benchmarks added. Details in `src/nimber_fast.md`, "Default for inv".
+- **J8b, first part — `BitslicedVector` packing by bit-matrix transposes** (2026-11-20):
+  delta swaps on tuples of $n$ words (`transpose64!` for the full $64 \times 64$ case); pack
+  0.09–1.4 ns and unpack 0.10–0.83 ns per element, 3.8–7.1 times faster from GF(16) up
+  (`bench/pack.jl`). Details in `src/bulk.md`, "Packing by bit-matrix transposes".
 - **J8 — Bulk and array operations** (2026-11-19): fast `rand!` for arrays, broadcasting (tested,
   no code needed), `MulBy` (multiplication by a constant as byte tables), matrix products
   (`ScalarMatMul`, `TableMatMul`, `CLMulMatMul` with one reduction per entry; default

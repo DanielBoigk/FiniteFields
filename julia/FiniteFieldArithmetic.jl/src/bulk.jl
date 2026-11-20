@@ -602,48 +602,121 @@ for M in (2, 4, 8, 16, 32)
     end
 end
 
-# Packing: plane j of word w collects bit j of 64 consecutive elements. The inner loop runs over
-# the 64 elements (variable shifts, vectorisable); elements past the end count as zero.
+# Packing by bit-matrix transposes (J8b). A block of 64 elements of n bits is a 64 × n bit
+# matrix (row t: element t, column j: its bit j); the n planes of the block are its transpose.
+# The transpose of a 64 × 64 bit matrix is six delta swaps: the stage of distance j (32, 16, …, 1)
+# exchanges bit log2(j) of the row index with the same bit of the column index, and the stages
+# commute. With only n columns, the stages j ≥ n merely gather element t into word t mod n at bit
+# offset n (t ÷ n); the stages j < n then run on those n words only. So a block costs one
+# gather (one shift and OR per element) and n/2 · log2(n) swaps, instead of 64 n bit moves.
+# Measurements in bulk.md, "Bitsliced vectors".
+
+# The mask of the stage of distance j: the low j bits of every 2j-bit group.
+delta_mask(j::Int) = ~zero(UInt64) ÷ ((one(UInt64) << j) + one(UInt64))
+
+# The delta swap of distance j on a block of rows held in a tuple (j a power of two, j < n).
+# Tuples rather than an array: with n and j constants, the block stays in registers and every
+# stage unrolls (an array buffer measured 1.5-2.5 times slower at GF(2^16) and GF(2^32)).
+@inline function delta_stage(x::NTuple{n, UInt64}, ::Val{j}) where {n, j}
+    m = delta_mask(j)
+    return ntuple(Val(n)) do i
+        k = i - 1
+        if k & j == 0
+            @inbounds x[i] ⊻ ((((x[i] >> j) ⊻ x[i + j]) & m) << j)
+        else
+            @inbounds x[i] ⊻ ((((x[i - j] >> j) ⊻ x[i]) & m))
+        end
+    end
+end
+
+# The stages j = n/2, …, 1: the transpose of a gathered block of n rows.
+@inline transpose_gathered(x::NTuple{1, UInt64}) = x
+for n in (2, 4, 8, 16, 32, 64)
+    body = :x
+    j = n >> 1
+    while j >= 1
+        body = :(delta_stage($body, Val($j)))
+        j >>= 1
+    end
+    @eval @inline transpose_gathered(x::NTuple{$n, UInt64}) = $body
+end
+
+"""
+    transpose64!(x::AbstractVector{UInt64}) -> x
+
+Transpose in place the 64 × 64 bit matrix whose row ``r`` is `x[r + 1]` (column ``c``: bit ``c``),
+by six delta swaps. Used, restricted to ``n`` columns, to pack and unpack
+[`BitslicedVector`](@ref)s.
+"""
+function transpose64!(x::AbstractVector{UInt64})
+    length(x) == 64 || throw(DimensionMismatch("transpose64!: need 64 words, got $(length(x))"))
+    y = transpose_gathered(ntuple(i -> @inbounds(x[firstindex(x) + i - 1]), Val(64)))
+    copyto!(x, y)
+    return x
+end
+
 function pack!(P::Matrix{UInt64}, a::AbstractVector{N}) where {N <: Nimber}
-    n = length(a)
-    T = storagetype(N)
-    buf = zeros(T, 64)
-    for w in 1:cld(n, 64)
-        base = 64 * (w - 1)
-        m = min(64, n - base)
-        @inbounds for t in 1:m
-            buf[t] = bits(a[firstindex(a) + base + t - 1])
+    return pack!(P, a, Val(degree(N)))
+end
+function pack!(P::Matrix{UInt64}, a::AbstractVector{N}, ::Val{n}) where {N <: Nimber, n}
+    len = length(a)
+    nfull = len >> 6
+    for w in 1:nfull
+        store_planes!(P, gather_block(a, firstindex(a) + 64 * (w - 1), Val(n)), w)
+    end
+    if len > 64 * nfull                              # the last block, padded with zeros
+        tail = zeros(N, 64)
+        copyto!(tail, 1, a, firstindex(a) + 64 * nfull, len - 64 * nfull)
+        store_planes!(P, gather_block(tail, 1, Val(n)), nfull + 1)
+    end
+    return P
+end
+
+# Row k + 1 = Σ_i element (n i + k) << (n i): the stages j ≥ n of the transpose.
+@inline function gather_block(a::AbstractVector{N}, first::Int, ::Val{n}) where {N, n}
+    return ntuple(Val(n)) do r
+        acc = zero(UInt64)
+        for i in 0:(64 ÷ n - 1)
+            acc |= (bits(@inbounds a[first + n * i + r - 1]) % UInt64) << (n * i)
         end
-        @inbounds for t in (m + 1):64
-            buf[t] = zero(T)
-        end
-        @inbounds for j in 1:degree(N)
-            acc = zero(UInt64)
-            for t in 1:64
-                acc |= (((buf[t] >> (j - 1)) & one(T)) % UInt64) << (t - 1)
-            end
-            P[w, j] = acc
-        end
+        acc
+    end
+end
+
+@inline function store_planes!(P::Matrix{UInt64}, x::NTuple{n, UInt64}, w::Int) where {n}
+    y = transpose_gathered(x)
+    for j in 1:n
+        @inbounds P[w, j] = y[j]
     end
     return P
 end
 
 function unpack!(a::AbstractVector{N}, P::Matrix{UInt64}) where {N <: Nimber}
-    n = length(a)
+    return unpack!(a, P, Val(degree(N)))
+end
+function unpack!(a::AbstractVector{N}, P::Matrix{UInt64}, ::Val{n}) where {N <: Nimber, n}
+    len = length(a)
+    nfull = len >> 6
+    for w in 1:nfull
+        scatter_block!(a, load_planes(P, w, Val(n)), firstindex(a) + 64 * (w - 1))
+    end
+    if len > 64 * nfull
+        tail = Vector{N}(undef, 64)
+        scatter_block!(tail, load_planes(P, nfull + 1, Val(n)), 1)
+        copyto!(a, firstindex(a) + 64 * nfull, tail, 1, len - 64 * nfull)
+    end
+    return a
+end
+
+@inline load_planes(P::Matrix{UInt64}, w::Int, ::Val{n}) where {n} =
+    transpose_gathered(ntuple(j -> @inbounds(P[w, j]), Val(n)))      # an involution
+
+# The inverse of gather_block.
+@inline function scatter_block!(a::AbstractVector{N}, x::NTuple{n, UInt64}, first::Int) where {N, n}
     T = storagetype(N)
-    buf = zeros(T, 64)
-    for w in 1:cld(n, 64)
-        fill!(buf, zero(T))
-        @inbounds for j in 1:degree(N)
-            p = P[w, j]
-            for t in 1:64
-                buf[t] |= (((p >> (t - 1)) & one(UInt64)) % T) << (j - 1)
-            end
-        end
-        base = 64 * (w - 1)
-        @inbounds for t in 1:min(64, n - base)
-            a[firstindex(a) + base + t - 1] = unsafe_frombits(N, buf[t])
-        end
+    m = (one(UInt64) << n) - one(UInt64)
+    for i in 0:(64 ÷ n - 1), k in 0:(n - 1)
+        @inbounds a[first + n * i + k] = unsafe_frombits(N, ((x[k + 1] >> (n * i)) & m) % T)
     end
     return a
 end

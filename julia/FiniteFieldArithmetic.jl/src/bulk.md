@@ -15,7 +15,7 @@
 > code: `src/bulk.jl`; the strategies it builds on in `src/nimber.jl`, `src/nimber_fast.jl`.
 > tests: `test/bulk.jl`, `test/constmul.jl`, `test/jet.jl`.
 > benchmarks: `bench/benchmarks.jl` (groups `bulk <field>`, `matmul <field>`), `bench/run.jl`,
-> `bench/rand_compare.jl`, `bench/constmul.jl`.
+> `bench/rand_compare.jl`, `bench/constmul.jl`, `bench/pack.jl`.
 
 ## Broadcasting
 
@@ -211,6 +211,43 @@ methods compute the result directly); `mul_elementwise!(c, a, b)` works in place
 GF(2^64) the tuples of 64 vectors no longer stay in registers, and a prototype (scratch, not
 committed) took 37–146 ns per element at GF(2^64) and 160–800 ns at GF(2^128), and allocated.
 
+### Packing by bit-matrix transposes (J8b)
+
+A block of 64 elements of $n$ bits is a $64 \times n$ bit matrix (row $t$: element $t$), and its
+$n$ planes are the transpose. The transpose of a $64 \times 64$ bit matrix is six *delta swaps*
+(H. S. Warren, *Hacker's Delight*, 2nd ed., 2013, §7-3): the stage of distance $j \in \{32, 16,
+\dots, 1\}$ exchanges bit $\log_2 j$ of the row index with the same bit of the column index, by
+`t = ((x[k] >> j) ⊻ x[k + j]) & m; x[k + j] ⊻= t; x[k] ⊻= t << j` on the rows $k$ with that bit
+clear. The stages commute (each swaps a different pair of index bits). With only $n$ nonzero
+columns, the stages $j \ge n$ do nothing but gather element $t$ into word $t \bmod n$ at bit
+offset $n \lfloor t/n \rfloor$; so `pack!` gathers (one shift and OR per element) and runs the
+$\log_2 n$ stages $j < n$ on $n$ words only, $\tfrac{n}{2}\log_2 n$ swaps per block instead of
+$64n$ single-bit moves. `unpack!` runs the same stages (an involution) and scatters.
+`transpose64!` is the full $64 \times 64$ case, tested against a bit-by-bit transpose.
+
+The block is a tuple of $n$ words, the stages are generated per $n$ and unroll completely, so the
+block stays in registers. A first version with a heap buffer and loops was 1.5–2.5 times slower
+at GF(2^16) and GF(2^32); a branch-free form of its stage loop was slower still.
+
+`bench/pack.jl`, 2026-11-20, same machine as below, $2^{14}$ elements, three runs each in one
+process (spread up to 12%), ns per element:
+
+| field | pack before | pack | unpack before | unpack |
+|---|---|---|---|---|
+| GF(2) | 0.14 | **0.09** | 0.105 | 0.104 |
+| GF(16) | 0.94 | **0.18** | 0.50 | **0.13** |
+| GF(256) | 1.88 | **0.28** | 1.00 | **0.17** |
+| GF(2^16) | 2.67 | **0.48** | 1.85 | **0.26** |
+| GF(2^32) | 5.36 | **1.39** | 3.65 | **0.83** |
+
+("before": the bit loops of J8, measured in the same session at commit `528fe02`.) Packing is now
+3.9–6.7 times and unpacking 3.8–7.1 times faster from GF(16) up; GF(2) was already one bit per
+element. A pack and an unpack together now cost about one scalar broadcast product at GF(256)
+(0.45 against 0.43 ns, the `c .* a` column of the J8 table below) and a third to a half of one
+above (0.74 against 1.30 at GF(2^16), 2.2 against 7.3 at GF(2^32)), so with the bitsliced product
+4–8 times faster, converting pays from a single product on above GF(256) (an inference from
+these two tables, not measured end to end).
+
 ## GPU compatibility
 
 The element types are `isbits` (tested), so arrays of them can live on a GPU. The `Recursive`
@@ -245,7 +282,7 @@ expectation, not measured.
 
 **Element-wise** (ns per element, 16384 elements):
 
-| field | `c .* a` | `MulBy(c).(a)` | set-up of `MulBy` (whole) | bitsliced product | pack / unpack | bitsliced add |
+| field | `c .* a` | `MulBy(c).(a)` | set-up of `MulBy` (whole) | bitsliced product | pack / unpack (J8; J8b: see above) | bitsliced add |
 |---|---|---|---|---|---|---|
 | GF(256) | 0.43 | **0.21** | 16 ns | **0.097** | 2.1 / 1.0 | 0.087 |
 | GF(2^16) | 1.30 | **0.45** | 0.28 µs | **0.24** | 2.7 / 1.7 | 0.16 |
@@ -257,7 +294,7 @@ expectation, not measured.
 than broadcasting `*` with a constant; its set-up costs about as much as 40–240 broadcast products, so it
 pays for arrays of a few hundred elements and up. The bitsliced product is 4–8 times faster than
 broadcasting `*` (`c .* a` measures the same scalar product), but packing and unpacking together cost 1–7
-broadcast products, so it pays only when the data stays bitsliced over several operations. Broadcast
+broadcast products (J8; since J8b about 1 at GF(256) and under 0.6 above, see above), so it paid only when the data stayed bitsliced over several operations. Broadcast
 products of two arrays are in `nimber.md` and `nimber_fast.md` (GF(256) `MulTable` 0.49 ns).
 
 **Sampling** (`bench/rand_compare.jl`, 16384 elements): `rand!` 0.031 (GF(256)) to 0.46 ns
@@ -270,8 +307,9 @@ products of two arrays are in `nimber.md` and `nimber_fast.md` (GF(256) `MulTabl
   decision.
 - No cache blocking in the matrix products: matrices are converted whole, and each entry streams
   a column of each. Sizes beyond the caches are not measured.
-- Packing and unpacking `BitslicedVector`s are simple bit loops (2–6 ns per element); a bit-matrix
-  transpose (e.g. $8 \times 8$ blocks with delta swaps) should be faster. Not tried.
+- Packing reads the source element by element (a gather with stride $n$); reading whole words of
+  the source's memory and transposing those was not tried. GF(2^32) packing (1.4 ns) is the
+  slowest: its 32-word block does not fit in the 16 general-purpose registers (not profiled).
 - No bitsliced matrix product, no bitsliced vectors above GF(2^32), no GPU kernels.
 - No ARM `PMULL`: on aarch64 `CLMulMatMul` computes as `ScalarMatMul(MulTable())`. Not measured
   on a CPU without `PCLMULQDQ`.

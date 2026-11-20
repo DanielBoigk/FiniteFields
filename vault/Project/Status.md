@@ -12,42 +12,49 @@
 Implementation of approved items. Approved and done so far: J0, the nimber fields GF(2) …
 GF(2^128), J2a, J8 (maintainer, 2026-11-19: "please implement J8!"), J8c (2026-11-19: "I
 kinda want all three"), J8d (2026-11-20: "go with your J8d proposal, fix the GF(2^16)
-slowdown first"), J8e (2026-11-20: "Switch to the tables") and J2b, the default for `inv`
-(2026-11-20: "Please implement the next item!", taken as approval of item 1 of the previous
-"Next" list). Ask before starting a backlog section the maintainer has not approved.
+slowdown first"), J8e (2026-11-20: "Switch to the tables"), J2b, the default for `inv`
+(2026-11-20: "Please implement the next item!", taken as approval of item 1 of the then "Next"
+list), and **J8b** (2026-11-20: "Please implement the next item!" again, taken the same way:
+J8b was item 1). J8b is a whole section; its first sub-item, packing, is done, the rest is open
+(below). Ask before starting a backlog section the maintainer has not approved.
 
 ## Done last
 
-- **J2b — a separate default for `inv`:** `default_inv_strategy(F)` (`src/nimber.jl`,
-  `src/nimber_fast.jl`) is behind `inv` and so `/`; it equals `default_strategy(F)` except
-  `LogTable16()` at GF(2^16) and GF(2^32). `*` is unchanged. Tests first (`test/inv_default.jl`,
-  JET on `inv` and `/`); the suite gained `inv latency` chains and `default (inv)` entries.
-  Measurements and reasoning in `src/nimber_fast.md`, "Default for inv":
-  - GF(2^16): `inv` 2.7× the throughput (0.85 vs 2.3–2.5 ns) and ~30% less latency.
-  - GF(2^32): **a trade-off for the maintainer to confirm.** 1.4–1.9× the throughput (8–11 vs
-    15 ns) but 20–50% more latency in a chain of dependent inversions (39–51 vs 31–33 ns).
-    Throughput was chosen (the bulk case); say if you prefer `MulTable` there.
-  - GF(2^64), GF(2^128): unchanged, `LogTable16` is not faster there.
-- **Verified:** `Pkg.test()` passes, 732,584 checks, Julia 1.13.1, x86_64-linux, Aqua and JET
-  included. Benchmarks: the `inv` groups, three runs in one process, on the noisy VM.
+- **J8b, first part — `BitslicedVector` packing by bit-matrix transposes** (`src/bulk.jl`,
+  "Packing by bit-matrix transposes"): `pack!`/`unpack!` treat 64 elements as a $64 \times n$
+  bit matrix and transpose it with delta swaps; the stages $j \ge n$ reduce to a gather, so only
+  $\log_2 n$ stages run, on $n$ words held in a tuple (registers). New `transpose64!` (internal).
+  Tests first (`test/bulk.jl`: transpose against a bit-by-bit oracle, packing from views and
+  reversed ranges, allocation bounds). `bench/pack.jl`, ns per element, before → after:
+  pack GF(16) 0.94 → 0.18, GF(256) 1.88 → 0.28, GF(2^16) 2.67 → 0.48, GF(2^32) 5.36 → 1.39;
+  unpack 0.50 → 0.13, 1.00 → 0.17, 1.85 → 0.26, 3.65 → 0.83; GF(2) unchanged (~0.1).
+  Details and the two slower versions tried in `src/bulk.md`.
+- **Verified:** `Pkg.test()` passes, 732,624 checks, Julia 1.13.1, x86_64-linux, Aqua and JET
+  included. `bench/pack.jl`, three runs per field, before and after, same session.
 - **Not verified:** Julia 1.10; ARM; CI (not pushed to `full-ci`); the full benchmark suite was
-  not rerun (only the `inv` groups); why `LogTable16`'s inversion has more latency at GF(2^32)
-  (not profiled).
+  not rerun (its `bulk` groups contain pack/unpack and would show the same change); the
+  end-to-end break-even of converting to bitsliced form (inferred from two tables, not measured);
+  GF(2^32) packing not profiled (32-word block vs 16 registers is a guess).
 
-Earlier: J8e and J8d (`MulBy` tables behind `c .* a` at every field), J8c, J8 (bulk
-operations), J2a, nimber GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to MathStruct.
-Details in git and the Backlog's *Done*.
+Earlier: J2b (the default for `inv`; the GF(2^32) choice of throughput over latency still awaits
+the maintainer's confirmation, see `src/nimber_fast.md`), J8e and J8d, J8c, J8, J2a, nimber
+GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to MathStruct. Details in git and the
+Backlog's *Done*.
 
-## Next (proposals, need the maintainer's go)
+## Next
 
-1. **J8b** (Backlog): faster bitsliced packing, cache blocking for large matrices, bitsliced
-   matrix products, GPU kernels.
-2. **FF-P1** (`Problems.md`): `CLMul` at GF(2^64) element by element; investigate on a quiet
-   machine. (Matrix products at GF(2^64) no longer depend on it.)
-3. **ARM `PMULL`** for `CLMul` and `CLMulMatMul` (needs an ARM machine to test).
-4. **J1a/J1b** — Conway representation and arbitrary $n$ (e.g. GF(2^7)); J3 (inversion:
-   Itoh–Tsujii and extended Euclid as further `inv` strategies, now that `inv` has its own
-   default), and linear algebra on top of the matrix products (rank, solving; V5).
+Within the approved J8b (remaining sub-items, in a proposed order):
+
+1. **Cache blocking of the matrix products** (`CLMulMatMul` converts whole matrices; sizes beyond
+   the caches are unmeasured): first benchmark large sizes, then block.
+2. **Bitsliced matrix product** and bitsliced vectors above GF(2^32) (a GF(2^64) prototype was
+   slow: tuples of 64 vectors spill).
+3. Why inlining both branches of `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
+4. ARM `PMULL` and GPU kernels: need an ARM machine and a GPU; not doable in this container.
+
+Not approved (need the maintainer's go): **FF-P1** (`Problems.md`, `CLMul` at GF(2^64) element by
+element); **J1a/J1b** (Conway representation, arbitrary $n$); **J3** (Itoh–Tsujii, extended
+Euclid as `inv` strategies); linear algebra on the matrix products (V5).
 
 ## Decisions in force (maintainer, 2026-11-19)
 
