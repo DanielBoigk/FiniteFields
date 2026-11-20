@@ -1,8 +1,8 @@
 #implementation #characteristic-2 #algorithm
 
 > Bulk and array operations for learners (backlog J8): fast sampling of arrays, multiplication
-> by a fixed constant as an $\mathbb{F}_2$-linear map (`MulBy`, used by `c .* a` for long arrays
-> from GF(2^16) up), matrix products with one
+> by a fixed constant as an $\mathbb{F}_2$-linear map (`MulBy`, used by `c .* a` for long
+> arrays), matrix products with one
 > reduction per entry in the polynomial basis (`CLMulMatMul`, the default above GF(256)), and
 > bitsliced vectors (`BitslicedVector`) up to GF(2^32). The common idea: convert or prepare once
 > per array, not once per product.
@@ -49,16 +49,16 @@ The categorical reading: $\mathbb{F}_{2^n}$ is a one-dimensional vector space ov
 `MulBy` forgets that structure to an $n$-dimensional one over $\mathbb{F}_2$, where the
 endomorphism $c \cdot {-}$ is just a matrix.
 
-## Constant times array in broadcasts: `ConstMulStrategy` (J8c, J8d)
+## Constant times array in broadcasts: `ConstMulStrategy` (J8c, J8d, J8e)
 
 `c .* a`, `a .* c` and `c * a` (Base computes the last by broadcasting), for a constant
 `c::F` and an array of `F` or a lazy broadcast, go through `default_constmul_strategy(F)`:
 
-- `ScalarConstMul()`: Base's behaviour, the scalar `*` per element. **Default up to GF(256).**
+- `ScalarConstMul()`: Base's behaviour, the scalar `*` per element. No longer a default.
 - `LazyMulBy(t)`: products with `c` through the byte tables of `MulBy(c)` when the result has at
-  least `t` elements, Base's `*` below; fused expressions stay fused. **Default from GF(2^16)**,
-  with `t = mulby_threshold(F)`: 768, 192, 256, 512 at GF(2^16), GF(2^32), GF(2^64), GF(2^128)
-  (256 at GF(256) and below, where it is not the default).
+  least `t` elements, Base's `*` below; fused expressions stay fused. **The default for every
+  field**, with `t = mulby_threshold(F)`: 96 at GF(2) … GF(256), 768, 192, 256, 512 at GF(2^16),
+  GF(2^32), GF(2^64), GF(2^128).
 
 The hooks are `Broadcast.broadcasted(*, c::F, a)` methods for `a::AbstractArray{F}` and
 `a::Broadcasted`; mixed fields (`GF4(2) .* a` with `a::Vector{GF2_64}`), scalars and two arrays
@@ -122,9 +122,30 @@ the tables cost more than their set-up time alone (a 1–64 KiB allocation and a
 cold table). From GF(2^16) up, B is 2.4–9 times faster than C on $2^{14}$–$2^{16}$ elements
 (GF(2^16) 2.4–2.8×, GF(2^32) 7–8×, GF(2^64) 7–9×, GF(2^128) 3–4×).
 
-**GF(256) and below** stay with `ScalarConstMul` (maintainer's decision on the J8c data, where
-the fused case did not gain). In the two runs since `MulBy` is used directly, B beats C in every
-expression from 96 elements, 1.4–2× on long arrays; whether to switch is open (J8e).
+**GF(256) and below (J8e).** J8d kept `ScalarConstMul` there, because in J8c the fused case did
+not gain. Since `MulBy` is used directly, B beat C at GF(256) in every expression from 96
+elements in both J8d runs, so the maintainer switched these fields to `LazyMulBy` (2026-11-20).
+A run with GF(2), GF(4), GF(16), GF(256) (`bench/constmul.jl small`, 2026-11-20; ns per
+element):
+
+| field | n | C into | B into | C fused | B fused | B0 fused |
+|---|---|---|---|---|---|---|
+| GF(2) | 96 | 0.44 | **0.36** | 0.53 | **0.48** | 0.58 |
+| GF(2) | $2^{16}$ | 0.40 | **0.22** | 0.53 | **0.40** | 0.45 |
+| GF(4) | 96 | 0.45 | **0.35** | 0.55 | **0.47** | 0.92 |
+| GF(4) | $2^{16}$ | 0.38 | **0.22** | 0.49 | **0.36** | 0.49 |
+| GF(16) | 96 | 0.40 | **0.31** | 0.54 | **0.43** | 0.52 |
+| GF(16) | $2^{16}$ | 0.49 | **0.21** | 0.45 | **0.32** | 0.49 |
+| GF(256) | 96 | 0.44 | **0.32** | 0.57 | **0.43** | 0.56 |
+| GF(256) | $2^{16}$ | 0.44 | **0.25** | 0.51 | **0.37** | 0.52 |
+
+At 96 elements B was faster than C in all three expressions in every one of these fields (and at
+GF(256) in both J8d runs), hence the threshold 96 for all four; GF(2) … GF(16) use the same
+256-byte tables as GF(256). The script's stricter rule (faster at every larger length too) gave
+64, 2048, 192 and 256: the later values come from single outliers (e.g. GF(4) fused at 4096,
+0.48 against 0.35–0.37 at the neighbouring lengths). On long arrays B is 1.6–2.3× faster in
+`out .= c .* a` and 1.3–1.4× in the fused expression. Below the threshold B0 costs a few ns
+per call more than C (visible below about 100 elements), as at the other levels.
 
 Allocations: C and B0 allocate nothing in `out .= …`; B above its threshold allocates its table
 (2–3 allocations, 256 B … 64 KiB).
@@ -244,9 +265,9 @@ products of two arrays are in `nimber.md` and `nimber_fast.md` (GF(256) `MulTabl
 
 ## What it does not do
 
-- `c .* a` uses tables only from GF(2^16) up, and only from the threshold on; GF(256) and below
-  keep Base's loop (open question J8e). A broadcast whose result is shorter than the threshold
-  pays a few ns per call for the decision.
+- `c .* a` uses tables only from the threshold on (96 elements at GF(256) and below, 192–768
+  above). A broadcast whose result is shorter than the threshold pays a few ns per call for the
+  decision.
 - No cache blocking in the matrix products: matrices are converted whole, and each entry streams
   a column of each. Sizes beyond the caches are not measured.
 - Packing and unpacking `BitslicedVector`s are simple bit loops (2–6 ns per element); a bit-matrix

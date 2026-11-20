@@ -94,7 +94,8 @@ abstract type ConstMulStrategy end
     ScalarConstMul()
 
 `c .* a` multiplies element by element with the scalar `*`; fused expressions stay fused. Base's
-behaviour, and the default up to ``\\mathbb{F}_{256}``.
+behaviour; no field uses it by default any more (it was the default up to ``\\mathbb{F}_{256}``
+until J8e, `src/bulk.md`).
 """
 struct ScalarConstMul <: ConstMulStrategy end
 
@@ -107,7 +108,7 @@ at least `threshold` elements, every product with `c` is a lookup in the byte ta
 [`MulBy`](@ref)`(c)`, built once per broadcast; below, it is Base's broadcast of `*`
 ([`ScalarConstMul`](@ref)), so short arrays cost nothing extra. Fused expressions stay fused.
 Implemented as a broadcast style (`ConstMulStyle`) that wraps the style of the arguments. The
-default from ``\\mathbb{F}_{2^{16}}`` up, with the measured break-even [`mulby_threshold`](@ref).
+default for every field, with the measured break-even [`mulby_threshold`](@ref).
 """
 struct LazyMulBy <: ConstMulStrategy
     threshold::Int
@@ -118,25 +119,21 @@ LazyMulBy(::Type{N}) where {N <: Nimber} = LazyMulBy(mulby_threshold(N))
     default_constmul_strategy(F)
 
 The [`ConstMulStrategy`](@ref) behind `c .* a` and `a .* c` for a constant `c::F` and an array
-(or lazy broadcast) `a`: [`ScalarConstMul`](@ref) up to ``\\mathbb{F}_{256}``, where tables gain
-nothing in fused expressions, and [`LazyMulBy`](@ref)`(F)` from ``\\mathbb{F}_{2^{16}}`` up
-(`src/bulk.md`). To change it, redefine it for a field, e.g.
+(or lazy broadcast) `a`: [`LazyMulBy`](@ref)`(F)` for every field (`src/bulk.md`). To change it,
+redefine it for a field, e.g.
 `FiniteFieldArithmetic.default_constmul_strategy(::Type{GF2_64}) = ScalarConstMul()`.
 """
-default_constmul_strategy(::Type{<:Nimber}) = ScalarConstMul()
-default_constmul_strategy(::Type{N}) where {N <: Union{GF2_16, GF2_32, GF2_64, GF2_128}} =
-    LazyMulBy(N)
+default_constmul_strategy(::Type{N}) where {N <: Nimber} = LazyMulBy(N)
 
 """
     mulby_threshold(F)
 
 The array length from which [`LazyMulBy`](@ref) builds tables: the smallest measured length from
 which it beat the scalar `*` in `c .* a`, `out .= c .* a` and `out .= c .* a .+ b`
-(`bench/constmul.jl`, one run; `src/bulk.md`, "Constant times array"): 768 at GF(2^16), 192 at
-GF(2^32), 256 at GF(2^64), 512 at GF(2^128). At GF(256) the fused expression never gained; 256 is
-where the other two did. GF(2) … GF(16) share GF(256)'s tables and value (not measured).
+(`bench/constmul.jl`; `src/bulk.md`, "Constant times array"): 96 at GF(2) … GF(256), 768 at
+GF(2^16), 192 at GF(2^32), 256 at GF(2^64), 512 at GF(2^128).
 """
-mulby_threshold(::Type{<:Nimber}) = 256
+mulby_threshold(::Type{<:Nimber}) = 96
 mulby_threshold(::Type{GF2_16}) = 768
 mulby_threshold(::Type{GF2_32}) = 192
 mulby_threshold(::Type{GF2_64}) = 256
