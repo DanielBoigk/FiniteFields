@@ -96,10 +96,17 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
 - **J6 — Constant time:** not a goal. Document which strategies happen to be constant-time; do not
   engineer for it.
-- **J8b — Bulk, remaining** (after J8; approved 2026-11-20; packing and the cache-blocking
-  measurement done, see *Done*): bitsliced vectors above GF(2^32) and a bitsliced matrix
-  product; ARM `PMULL`; GPU kernels (needs a GPU to test); why inlining both branches of
+- **J8b — Bulk, remaining** (after J8; approved 2026-11-20; packing, the cache-blocking
+  measurement, the bitsliced matrix product and bitsliced vectors at every level done, see
+  *Done*): ARM `PMULL`; GPU kernels (needs a GPU to test); why inlining both branches of
   `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
+- **J8g — `BitslicedMatMul` as a default by size** (proposed 2026-11-20, not approved):
+  `default_matmul_strategy` depends only on the field; `BitslicedMatMul` wins from about 256 ×
+  256 up at GF(2) … GF(2^16) and from about 1024 at GF(2^32) and GF(2^64), loses on small
+  matrices (`src/bitsliced_matmul.md`, "Proposal"). Choose it by the size of the product, with
+  thresholds measured like `mulby_threshold`. Possibly with a `BitslicedMatrix` type that keeps
+  the planes between products, and a faster small-size path (preallocated temporaries, smaller
+  tables).
 - **J8f — Fewer carry-less products in `CLMulMatMul`** (proposed 2026-11-20, not approved): the
   matrix product is bound by `PCLMULQDQ` throughput, not by the caches (`src/bulk.md`, "Larger
   sizes and cache blocking"). Two terms per 64-bit product at GF(2^16) ($a_1 + a_2x^{32}$ times
@@ -134,6 +141,11 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   and `/`; `LogTable16` at GF(2^16) (2.7× throughput, less latency) and GF(2^32) (1.4–1.9×
   throughput, 20–50% more latency: chosen for throughput, confirmed by the maintainer 2026-11-20), as `*`
   elsewhere. `inv latency` benchmarks added. Details in `src/nimber_fast.md`, "Default for inv".
+- **J8b, bitsliced matrix product and bitsliced vectors at every level** (2026-11-20):
+  `BitslicedMatMul` (the nimber recursion on bit matrices, $3^K$ GF(2) products by the Four
+  Russians); not a default (J8g proposed). `BitslicedVector` at GF(2^64) and GF(2^128) (top
+  recursion levels through a scratch buffer): 7.1× and 5.6× the scalar product. Details in
+  `src/bitsliced_matmul.md` and `src/bulk.md`.
 - **J8b, cache blocking — measured, not adopted** (2026-11-20): `bench/matmul_sizes.jl` (64 …
   2048): no slowdown with size on the development VM (260 MiB L3); a blocked `CLMulMatMul` with
   register tiles (1×1 … 4×2) at best tied the plain loop, which is bound by `PCLMULQDQ`
