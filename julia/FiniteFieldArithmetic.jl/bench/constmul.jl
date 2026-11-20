@@ -1,6 +1,7 @@
 # Multiplication of an array by a constant in broadcasts (backlog J8c, J8d; src/bulk.md): the
 # strategies of `c .* a` against each other, per field and array length, alone and fused.
-#   julia --project=bench bench/constmul.jl [quick]
+#   julia --project=bench bench/constmul.jl [quick] [small]
+# (`small`: the fields GF(2), GF(4), GF(16), GF(256) instead of GF(256) … GF(2^128))
 #
 # Strategies: C = ScalarConstMul(), B = LazyMulBy(0) (tables always), B0 = LazyMulBy(typemax(Int))
 # (never tables: the cost of B below its threshold, i.e. of its Union result). The eager
@@ -18,7 +19,7 @@ using FiniteFieldArithmetic: ScalarConstMul, LazyMulBy, const_mul_broadcasted
 using Base.Broadcast: broadcasted, materialize, materialize!
 
 const QUICK = "quick" in ARGS
-const FIELDS = (GF256, GF2_16, GF2_32, GF2_64, GF2_128)
+const FIELDS = "small" in ARGS ? (GF2, GF4, GF16, GF256) : (GF256, GF2_16, GF2_32, GF2_64, GF2_128)
 const LENGTHS = QUICK ? (2^2, 2^6, 2^10, 2^14) :
                 (4, 8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1024, 2048, 4096,
                  2^14, 2^16)

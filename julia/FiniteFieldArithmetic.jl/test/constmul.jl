@@ -1,9 +1,9 @@
-# Multiplication of an array by a constant in broadcasts (backlog J8c, J8d): `c .* a` and
+# Multiplication of an array by a constant in broadcasts (backlog J8c, J8d, J8e): `c .* a` and
 # `a .* c` go through `default_constmul_strategy`, which picks one of
-# - `ScalarConstMul()`: the scalar `*` element by element (Base's behaviour; default up to GF(256));
+# - `ScalarConstMul()`: the scalar `*` element by element (Base's behaviour; no longer a default);
 # - `LazyMulBy(t)`: a marker in its own broadcast style; when the fused broadcast is materialised,
 #   the products use `MulBy(c)` if the result has at least `t` elements and Base's `*` otherwise
-#   (default from GF(2^16), `t = mulby_threshold(F)`).
+#   (the default for every field, `t = mulby_threshold(F)`).
 #
 # Oracle: `mul(Recursive(), …)`, independent of both. The strategy is switched by redefining
 # `default_constmul_strategy` for one field (the documented way), and every check then runs in
@@ -57,15 +57,15 @@ function check_constmul(F, s, n)
     return nothing
 end
 
-@testset "defaults: scalar up to GF(256), lazy tables above" begin
+@testset "defaults: lazy tables for every field" begin
     @test ScalarConstMul() isa ConstMulStrategy
     @test LazyMulBy(10) isa ConstMulStrategy
     for F in CM_LEVELS
         @test mulby_threshold(F) isa Int && mulby_threshold(F) >= 0
         @test LazyMulBy(F) === LazyMulBy(mulby_threshold(F))
-        @test default_constmul_strategy(F) ===
-              (degree(F) <= 8 ? ScalarConstMul() : LazyMulBy(F))
+        @test default_constmul_strategy(F) === LazyMulBy(F)
     end
+    @test all(F -> mulby_threshold(F) == 96, (GF2, GF4, GF16, GF256))   # measured (src/bulk.md)
     # the default reaches the dot syntax: long arrays use tables, short ones Base's broadcast
     c = GF2_32(0x53)
     long, short = rand(rng, GF2_32, mulby_threshold(GF2_32)), rand(rng, GF2_32, 3)
