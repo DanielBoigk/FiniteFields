@@ -12,7 +12,8 @@ Multiplication strategies ([`MulStrategy`](@ref): [`Recursive`](@ref), [`MulTabl
 
 Bulk operations (`src/bulk.md`): fast `rand!` for arrays, [`MulBy`](@ref) (multiplication by a
 constant), matrix products ([`matmul!`](@ref) with a [`MatMulStrategy`](@ref); `*` and
-`LinearAlgebra.mul!` use [`default_matmul_strategy`](@ref)), and [`BitslicedVector`](@ref).
+`LinearAlgebra.mul!` use [`default_matmul_strategy`](@ref)), [`BitslicedVector`](@ref), and the
+strategies of `c .* a` ([`ConstMulStrategy`](@ref), chosen by [`default_constmul_strategy`](@ref)).
 
 Type stability of the arithmetic is enforced by DispatchDoctor's `@stable` (mode `"error"`); set
 the preference `instability_check = "disable"` for this package to switch the checks off.

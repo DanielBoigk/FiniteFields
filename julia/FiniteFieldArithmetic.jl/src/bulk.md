@@ -12,9 +12,9 @@
 > unreduced products once, there for GHASH); J. H. Conway, *On Numbers and Games* (2nd ed., 2001),
 > ch. 6 (the nimber recursion that the bitsliced circuit evaluates).
 > code: `src/bulk.jl`; the strategies it builds on in `src/nimber.jl`, `src/nimber_fast.jl`.
-> tests: `test/bulk.jl`, `test/jet.jl`.
+> tests: `test/bulk.jl`, `test/constmul.jl`, `test/jet.jl`.
 > benchmarks: `bench/benchmarks.jl` (groups `bulk <field>`, `matmul <field>`), `bench/run.jl`,
-> `bench/rand_compare.jl`.
+> `bench/rand_compare.jl`, `bench/constmul.jl`.
 
 ## Broadcasting
 
@@ -47,6 +47,85 @@ GF(2^16) … GF(2^128).
 The categorical reading: $\mathbb{F}_{2^n}$ is a one-dimensional vector space over itself, and
 `MulBy` forgets that structure to an $n$-dimensional one over $\mathbb{F}_2$, where the
 endomorphism $c \cdot {-}$ is just a matrix.
+
+## Constant times array in broadcasts: `ConstMulStrategy` (J8c)
+
+`c .* a`, `a .* c` and `c * a` (Base computes the last by broadcasting), for a constant
+`c::F` and an array of `F` or a lazy broadcast, go through `default_constmul_strategy(F)`:
+
+- `ScalarConstMul()` (**C**, the default for every field): Base's behaviour, the scalar `*` per
+  element; fused expressions stay fused.
+- `EagerMulBy()` (**A**): the products through `MulBy` tables at once, returning an array. Breaks
+  fusion: `c .* a .+ b` makes a temporary, `out .= c .* a` allocates and copies.
+- `LazyMulBy(t)` (**B**): a lazy broadcast of the callable `ConstMul`, which holds `c` and, for
+  an argument of at least `t` elements, the `MulBy` tables. Fusion stays. Below `t` it calls the
+  scalar `*`; one callable type for both cases keeps it type-stable, a `Bool` field decides per
+  element. `LazyMulBy(F)` takes `t = mulby_threshold(F)`, the measured break-even.
+
+The hooks are `Broadcast.broadcasted(*, c::F, a)` methods for `a::AbstractArray{F}` and
+`a::Broadcasted`; mixed fields (`GF4(2) .* a` with `a::Vector{GF2_64}`), scalars and two arrays
+are untouched. Elements of another type inside a lazy argument get the scalar `*`. To use A or B
+for a field, redefine `default_constmul_strategy` for it (the tests do this).
+
+`ConstMul` builds its own table at every level, GF(256) included, rather than indexing the
+column `c` of the 64 KiB product table: on $2^{14}$ elements 0.20 ns per element against 0.36
+(set-up 20 ns). The length decides for the whole broadcast; inside a fused expression the number
+of products can differ (a vector broadcast against a matrix), which the threshold ignores.
+
+**Measurements** (`julia --project=bench bench/constmul.jl`, one run, 2026-11-20, same VM as
+below; median ns per element; B0 is `LazyMulBy(typemax(Int))`, i.e. B below its threshold).
+Full output: 19 lengths from 4 to $2^{16}$; an excerpt:
+
+| field | n | C into | B into | C fused | B fused | B0 fused | A fused |
+|---|---|---|---|---|---|---|---|
+| GF(256) | 64 | 0.43 | 0.55 | 0.52 | 0.65 | 0.52 | 0.67 |
+| GF(256) | 1024 | 0.43 | **0.24** | 0.51 | 0.36 | 0.51 | 0.38 |
+| GF(256) | $2^{16}$ | 0.42 | **0.23** | 0.48 | 0.50 | 0.48 | 0.28 |
+| GF(2^16) | 64 | 1.41 | 5.26 | 1.59 | 5.53 | 2.00 | 5.58 |
+| GF(2^16) | 1024 | 1.36 | **0.81** | 1.52 | **0.86** | 1.80 | 0.85 |
+| GF(2^16) | $2^{16}$ | 1.34 | **0.47** | 1.49 | **0.58** | 3.67 | 0.52 |
+| GF(2^32) | 64 | 7.08 | 14.5 | 7.58 | 15.3 | 7.43 | 14.2 |
+| GF(2^32) | 1024 | 7.34 | **1.94** | 7.71 | **2.25** | 7.62 | 1.99 |
+| GF(2^32) | $2^{16}$ | 7.53 | **0.89** | 7.99 | **1.18** | 7.99 | 1.14 |
+| GF(2^64) | 64 | 21.8 | 43.3 | 22.5 | 43.1 | 22.4 | 44.2 |
+| GF(2^64) | 1024 | 24.9 | **5.46** | 22.5 | **5.38** | 22.5 | 5.25 |
+| GF(2^64) | $2^{16}$ | 22.5 | **2.47** | 23.5 | **2.69** | 23.4 | 3.32 |
+| GF(2^128) | 64 | 49.6 | 186 | 74.0 | 189 | 50.8 | 180 |
+| GF(2^128) | 1024 | 49.2 | **27.9** | 49.9 | **28.2** | 50.7 | 25.7 |
+| GF(2^128) | $2^{16}$ | 49.4 | **21.0** | 51.6 | **21.3** | 51.0 | 15.4 |
+
+Break-even of B against C, the smallest measured length from which B was faster in all of
+`c .* a`, `out .= c .* a` and `out .= c .* a .+ b` (now `mulby_threshold`): **768** at GF(2^16),
+**192** at GF(2^32), **256** at GF(2^64), **512** at GF(2^128). The J8 estimate (40–240) was too
+low: the tables cost more than their set-up time alone (a 1–64 KiB allocation, and the first
+pass over a cold table). GF(2^32) breaks even earliest because its scalar product is the slowest
+relative to a lookup. At GF(256), B is about twice as fast in `c .* a` and `out .= c .* a` from
+about 128–256 elements, but **not in the fused expression** (0.33–0.53 against 0.47–0.50, noise
+either way); the threshold there is 256. GF(2) … GF(16) take GF(256)'s value (not measured).
+
+Findings:
+
+- **A against B:** from GF(2^16) up, A is not faster than B beyond noise (GF(2^128) fused at
+  $2^{16}$: 15.4 against 21.3, but 17.3 against 17.1 at 4096 and 15.3 against 14.8 at $2^{14}$),
+  and it allocates a result even for `out .= c .* a`. **At GF(256) A wins the fused expression**
+  consistently from 2048 elements (0.25–0.30 ns against 0.33–0.53 for B and 0.47–0.50 for C):
+  two separate passes, a table lookup and an XOR, apparently vectorise better than the fused
+  loop with a lookup in it. An observation, not profiled.
+- **B below its threshold (B0)** costs the same as C, except at GF(2^16) in the fused expression:
+  19–27% slower at every measured length up to $2^{14}$ (e.g. 1.80 against 1.52 at 1024), and
+  3.67 against 1.49 at $2^{16}$ (one value, possibly noise). Probably the per-element branch
+  on `tables` keeps the loop from vectorising as C's does; not profiled. A fix would return C's own
+  broadcast below the threshold (a `Union` of two types, which Julia splits), not tried.
+- Allocations: C and B0 allocate nothing in `out .= …`; B above its threshold allocates its table
+  (2–3 allocations, 256 B … 64 KiB); A allocates the table and the result.
+
+**Proposal (not adopted; the default stays C until the maintainer decides):** make
+`LazyMulBy(F)` the default from GF(2^16) up, where it is 2.4–9 times faster on arrays of
+$2^{14}$–$2^{16}$ elements (GF(2^16) 2.6–2.8×, GF(2^32) 7–8.5×, GF(2^64) 9×, GF(2^128) 2.4–3.3×)
+and costs nothing below the threshold except at GF(2^16) fused (about 20%; fixing that first
+would be better). Keep C at GF(256) and below: B gains only in unfused expressions there, and the
+fused case that A wins would need A's eager rewrite, which breaks fusion everywhere else. Drop
+A.
 
 ## Matrix products
 
@@ -151,11 +230,8 @@ products of two arrays are in `nimber.md` and `nimber_fast.md` (GF(256) `MulTabl
 
 ## What it does not do
 
-- `c .* a` does not switch to `MulBy` by itself. Two ways to do it: an eager `broadcasted` method
-  (A) returns `MulBy(c).(a)` at once, which breaks fusion (`c .* a .+ b` would allocate a
-  temporary); a lazy rewrite (B) returns `broadcasted(MulBy(c), a)` and keeps fusion, but pays the
-  table set-up on every call and needs a length threshold. Comparing both against today's
-  behaviour (C) is backlog item J8c.
+- `c .* a` does not use tables by default: `LazyMulBy` exists and is measured (above), but the
+  default stays `ScalarConstMul` until the maintainer decides.
 - No cache blocking in the matrix products: matrices are converted whole, and each entry streams
   a column of each. Sizes beyond the caches are not measured.
 - Packing and unpacking `BitslicedVector`s are simple bit loops (2–6 ns per element); a bit-matrix

@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J2a, J8); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J2a, J8, J8c); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -96,29 +96,16 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
 - **J6 — Constant time:** not a goal. Document which strategies happen to be constant-time; do not
   engineer for it.
-- **J8c — Automatic `MulBy` for `c .* a`** (maintainer, 2026-11-19: "I kinda want all three ...
-  figure out the threshold where B becomes viable"; for the next session). Three variants:
-  - **C, baseline (today):** `c .* a` uses the scalar `*` element by element; `MulBy(c)` is explicit
-    and can be reused across calls.
-  - **A, eager:** `broadcasted(::typeof(*), c::Nimber, a::AbstractArray)` (and `a .* c`) returns
-    `MulBy(c).(a)` at once. Faster products, but breaks fusion: `c .* a .+ b` gets a temporary and
-    an extra pass, `out .= c .* a` allocates and copies.
-  - **B, lazy:** the same hook returns `broadcasted(MulBy(c), a)`, so the fused loop calls the
-    table lookup and fusion stays. Costs: table set-up on every call (16 ns at GF(256) to 12 µs
-    at GF(2^128)), a hidden table allocation (up to 64 KiB), extra methods for `a .* c` and for a
-    lazy argument (`c .* (a .+ b)`). Below a length threshold it must use the scalar `*`; to stay
-    type-stable, one callable type holding `c` that builds tables only above the threshold.
-
-  Work: benchmark A and B against C per field (GF(256) … GF(2^128)) over array lengths
-  (e.g. 2^2 … 2^16), alone and in fused expressions (`c .* a .+ b`, `out .= c .* a`), counting
-  allocations; find each field's break-even length for B; tests that fused expressions still
-  allocate nothing and that short arrays are no slower. Then propose which variant (if any)
-  becomes the default. The break-even estimated from J8's measurements is 40–240 elements
-  (set-up cost over gain per product, `src/bulk.md`); an estimate, to be measured.
+- **J8d — Default for `c .* a`** (proposal from J8c, needs the maintainer's decision): make
+  `LazyMulBy(F)` the default from GF(2^16) up (2.4–9 times faster on long arrays), keep
+  `ScalarConstMul` at GF(256) and below, drop `EagerMulBy`. Before that, remove the 19–27% cost of
+  `LazyMulBy` below its threshold at GF(2^16) in fused expressions (return Base's broadcast below
+  the threshold, a `Union` of two types; not tried). Details: `src/bulk.md`, "Constant times
+  array".
 - **J8b — Bulk, remaining** (after J8): faster packing of `BitslicedVector`s (bit-matrix
   transposes); bitsliced vectors above GF(2^32) and a bitsliced matrix product; cache blocking of
-  the matrix products; ARM `PMULL`; GPU kernels (needs a GPU to test); whether `c .* a` should use
-  `MulBy` by itself.
+  the matrix products; ARM `PMULL`; GPU kernels (needs a GPU to test); why at GF(256) the eager `MulBy` beats the fused
+  loop in `out .= c .* a .+ b` (J8c, not profiled).
 - **J7 — $\overline{\mathbb{F}}_2$ ("$n = \infty$"):** every element lives in some finite
   $\mathbb{F}_{2^n}$, so elements carry their degree and an operation embeds both operands into
   $\mathbb{F}_{2^{\operatorname{lcm}(m,n)}}$ through Conway polynomials (pseudo-Conway beyond the
@@ -150,6 +137,10 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   `CLMulMatMul` from GF(2^16), 3.5 ns per multiply-add at GF(2^128) against 79), `*` and
   `LinearAlgebra.mul!`, `BitslicedVector` up to GF(2^32); `isbits` element types, GPU not tested.
   Details and measurements in `src/bulk.md`.
+- **J8c — Strategies for `c .* a`** (2026-11-20): `c .* a`, `a .* c` and `c * a` go through
+  `default_constmul_strategy` (`ScalarConstMul`, the default; `EagerMulBy`; `LazyMulBy(t)` with
+  a measured `mulby_threshold`: 768 / 192 / 256 / 512 at GF(2^16) … GF(2^128), 256 at GF(256));
+  `bench/constmul.jl`; measurements and proposal in `src/bulk.md`. The default is unchanged.
 - **T4a — CI** (2026-11-19): path-filtered `lean.yml` and `julia.yml`, and `full-ci.yml` (all
   components plus a Quartz build) on the `full-ci` branch. Not yet run on GitHub.
 - **T6 — Move to MathStruct** (2026-11-19): repository transferred by the maintainer; `baseUrl`

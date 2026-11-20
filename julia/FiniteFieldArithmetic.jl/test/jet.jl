@@ -44,7 +44,7 @@ using JET, Test
             @test_opt Base.Broadcast.materialize(const_mul_broadcasted(s, x, a))
         end
         @test_opt const_mul_broadcasted(LazyMulBy(0), x, a).f(x)
-        @test_opt x .* a
+        @test_opt x * a                                # Base broadcasts: the same hook as x .* a
     end
     for F in (GF256, GF2_16, GF2_32)
         v = BitslicedVector(fill(F(3), 70))

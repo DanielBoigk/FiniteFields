@@ -130,10 +130,17 @@ default_constmul_strategy(::Type{<:Nimber}) = ScalarConstMul()
 """
     mulby_threshold(F)
 
-The array length from which multiplying by a constant through tables (`LazyMulBy`) is faster than
-the scalar `*` in every measured expression (`bench/constmul.jl`, `src/bulk.md`).
+The array length from which [`LazyMulBy`](@ref) builds tables: the smallest measured length from
+which it beat the scalar `*` in `c .* a`, `out .= c .* a` and `out .= c .* a .+ b`
+(`bench/constmul.jl`, one run; `src/bulk.md`, "Constant times array"): 768 at GF(2^16), 192 at
+GF(2^32), 256 at GF(2^64), 512 at GF(2^128). At GF(256) the fused expression never gained; 256 is
+where the other two did. GF(2) … GF(16) share GF(256)'s tables and value (not measured).
 """
-mulby_threshold(::Type{<:Nimber}) = 0
+mulby_threshold(::Type{<:Nimber}) = 256
+mulby_threshold(::Type{GF2_16}) = 768
+mulby_threshold(::Type{GF2_32}) = 192
+mulby_threshold(::Type{GF2_64}) = 256
+mulby_threshold(::Type{GF2_128}) = 512
 
 # The callable of LazyMulBy and EagerMulBy: `c`, and the byte tables of x ↦ c ⊗ x (as in MulBy)
 # when `tables` is set. Up to GF(256) this is a copy of a column of NIM256_MUL: indexing
