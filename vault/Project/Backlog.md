@@ -101,9 +101,10 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
   *Done*): ARM `PMULL`; GPU kernels (needs a GPU to test); why inlining both branches of
   `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
 - **J8g — `BitslicedMatMul` as a default by size** (proposed 2026-11-20, not approved):
-  `default_matmul_strategy` depends only on the field; `BitslicedMatMul` wins from about 256 ×
-  256 up at GF(2) … GF(2^16) and from about 1024 at GF(2^32) and GF(2^64), loses on small
-  matrices (`src/bitsliced_matmul.md`, "Proposal"). Choose it by the size of the product, with
+  `default_matmul_strategy` depends only on the field; `BitslicedMatMul` wins from 64 × 64 at
+  GF(2) … GF(16), 128 at GF(256), 256 at GF(2^16) and GF(2^32), 512 at GF(2^64) and GF(2^128)
+  (up to 170× at GF(4), 2–3× at GF(2^64) and GF(2^128) from 1024), and loses on smaller matrices
+  (`src/bitsliced_matmul.md`, "Measurements", "Proposal"). Choose it by the size of the product, with
   thresholds measured like `mulby_threshold`. Possibly with a `BitslicedMatrix` type that keeps
   the planes between products, and a faster small-size path (preallocated temporaries, smaller
   tables).
@@ -143,7 +144,8 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   elsewhere. `inv latency` benchmarks added. Details in `src/nimber_fast.md`, "Default for inv".
 - **J8b, bitsliced matrix product and bitsliced vectors at every level** (2026-11-20):
   `BitslicedMatMul` (the nimber recursion on bit matrices, $3^K$ GF(2) products by the Four
-  Russians); not a default (J8g proposed). `BitslicedVector` at GF(2^64) and GF(2^128) (top
+  Russians), 48–170× faster at GF(2) … GF(256) and 2–13× above from 1024 × 1024; not a
+  default (J8g proposed). `BitslicedVector` at GF(2^64) and GF(2^128) (top
   recursion levels through a scratch buffer): 7.1× and 5.6× the scalar product. Details in
   `src/bitsliced_matmul.md` and `src/bulk.md`.
 - **J8b, cache blocking — measured, not adopted** (2026-11-20): `bench/matmul_sizes.jl` (64 …

@@ -60,11 +60,55 @@ $c$) are allocated per node.
 
 ## Measurements
 
-MEASUREMENTS
+`julia --project=bench bench/matmul_sizes.jl compare`, 2026-11-20, Julia 1.13.1, a 4-thread
+Intel Xeon cloud VM (one thread used), $n \times n$ times $n \times n$, conversions included,
+minimum of 3 (from 1024) or 20 runs; ns per multiply-add, the faster in bold. "before": the
+default (`TableMatMul` up to GF(256), `CLMulMatMul` above).
+
+| field | | 64 | 128 | 256 | 512 | 1024 | 2048 |
+|---|---|---|---|---|---|---|---|
+| GF(2) | before | 0.351 | 0.325 | 0.313 | 0.303 | 0.327 | 0.316 |
+| | bitsliced | **0.066** | **0.016** | **0.006** | **0.003** | **0.004** | **0.002** |
+| GF(4) | before | 0.476 | 0.488 | 0.493 | 0.454 | 0.466 | 0.460 |
+| | bitsliced | **0.129** | **0.030** | **0.009** | **0.004** | **0.004** | **0.003** |
+| GF(16) | before | 0.601 | 0.574 | 0.543 | 0.548 | 0.553 | 0.585 |
+| | bitsliced | **0.317** | **0.061** | **0.014** | **0.008** | **0.006** | **0.005** |
+| GF(256) | before | **0.617** | 0.613 | 0.621 | 0.577 | 0.590 | 0.638 |
+| | bitsliced | 0.809 | **0.148** | **0.032** | **0.016** | **0.012** | **0.014** |
+| GF(2^16) | before | **0.331** | **0.299** | 0.292 | 0.275 | 0.284 | 0.440 |
+| | bitsliced | 2.19 | 0.402 | **0.088** | **0.047** | **0.041** | **0.034** |
+| GF(2^32) | before | **0.400** | **0.325** | 0.309 | 0.292 | 0.368 | 0.351 |
+| | bitsliced | 6.90 | 1.27 | **0.259** | **0.130** | **0.132** | **0.098** |
+| GF(2^64) | before | **0.639** | **0.621** | **0.567** | 0.569 | 0.771 | 0.700 |
+| | bitsliced | 19.6 | 3.58 | 0.770 | **0.400** | **0.352** | **0.329** |
+| GF(2^128) | before | **2.82** | **2.59** | 2.57 | 3.33 | 3.37 | 8.87 |
+| | bitsliced | 62.7 | 11.9 | 2.56 | **1.56** | **1.15** | **0.956** |
+
+From 1024 the bitsliced product is 90–170 times faster at GF(2) … GF(16), 47–48 times at GF(256),
+7–13 times at GF(2^16), 2.8–3.6 times at GF(2^32), 2.1–2.2 times at GF(2^64) and 2.9 times at
+GF(2^128) (the 9.3 at 2048 compares with a `CLMulMatMul` run of 8.87 that `bulk.md` measured at
+3.85 earlier the same day: an outlier of this single run, not a trend). The cost follows the
+$3^K$ GF(2) products: per multiply-add at 1024 about 0.004, 0.012, 0.041, 0.13, 0.35, 1.15 ns from
+GF(2) to GF(2^128), roughly a factor 3 per level, against a `PCLMULQDQ` loop whose cost grows
+more slowly. On small matrices the fixed costs dominate (tables per 64 inner indices, $3^K$
+allocations, conversions): 64 × 64 at GF(2^128) is 22 times slower than `CLMulMatMul`.
+
+Crossovers (smallest measured size from which it was faster at every larger size): 64 at GF(2) …
+GF(16), 128 at GF(256), 256 at GF(2^16) and GF(2^32) (1.19× at 256), 512 at GF(2^64) and
+GF(2^128) (a tie at 256). Single run; this VM varies by up to about 40% between runs, so the
+crossovers are uncertain by one size step; the large ratios are not.
+
+Bitsliced vectors at GF(2^64) and GF(2^128), which this note's code shares: `bulk.md`.
 
 ## Proposal (not adopted)
 
-PROPOSAL
+`default_matmul_strategy(F)` depends only on the field, so `BitslicedMatMul` could only become a
+default for every size, and it loses on small matrices. Proposed as **J8g** (Backlog): choose
+the strategy by the size of the product, `BitslicedMatMul` from the crossovers above (measured
+again with a stricter rule, like `mulby_threshold`), the present defaults below them. Smaller
+improvements that would lower the crossovers: preallocated temporaries for the recursion, fewer
+or narrower tables when the left factor has few rows, and a `BitslicedMatrix` type that keeps
+the planes between products. Not done: changing defaults is the maintainer's decision.
 
 ## What it does not do
 
