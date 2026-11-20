@@ -27,6 +27,8 @@ using JET, Test
             @test_opt inverse(s, x)
         end
         @test_opt x^7
+        @test_opt minimal_level(x)                     # J9 (reduce_field is unstable by design)
+        @test_opt minimal_degree(x)
         @test_opt inv(x)
         @test_opt x / y
     end
