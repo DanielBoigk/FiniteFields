@@ -151,8 +151,12 @@ throughput, 9.5–10.1 latency).
 - **GF(2^16):** `LogTable16` wins both: 2.7 times the throughput, about 30% less latency. Its
   inverse is one lookup pair, `exp(65535 - log a)`, against the norm recursion down to GF(256).
 - **GF(2^32): a trade-off.** `LogTable16` has 1.4–1.9 times the throughput but 20–50% more
-  latency than `MulTable`. Throughput (independent inverses, the bulk case) was chosen; a chain of
-  dependent inversions is faster with `inverse(MulTable(), x)`. Presumably the latency comes from
+  latency than `MulTable`. Throughput (independent inverses, the bulk case) was chosen, and the
+  maintainer confirmed it (2026-11-20); a chain of dependent inversions is faster with
+  `inverse(MulTable(), x)`. To change the default later: the one line
+  `default_inv_strategy(::Type{<:Union{GF2_16, GF2_32}})` in `src/nimber_fast.jl` (and the
+  expected strategy in `test/inv_default.jl`), or, in user code,
+  `FiniteFieldArithmetic.default_inv_strategy(::Type{GF2_32}) = MulTable()`. Presumably the latency comes from
   the three GF(2^16) products of the norm step, each two dependent lookups in tables beyond L1
   (as for `*`, see above); not profiled.
 - **GF(2^64), GF(2^128):** unchanged; `LogTable16` is not faster there.

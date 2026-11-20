@@ -127,7 +127,7 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   and measurements in `src/nimber_fast.md`, open question FF-P1.
 - **J2b — A separate default for `inv`** (2026-11-20): `default_inv_strategy(F)` behind `inv`
   and `/`; `LogTable16` at GF(2^16) (2.7× throughput, less latency) and GF(2^32) (1.4–1.9×
-  throughput, 20–50% more latency: chosen for throughput, maintainer to confirm), as `*`
+  throughput, 20–50% more latency: chosen for throughput, confirmed by the maintainer 2026-11-20), as `*`
   elsewhere. `inv latency` benchmarks added. Details in `src/nimber_fast.md`, "Default for inv".
 - **J8b, first part — `BitslicedVector` packing by bit-matrix transposes** (2026-11-20):
   delta swaps on tuples of $n$ words (`transpose64!` for the full $64 \times 64$ case); pack

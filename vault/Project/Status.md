@@ -36,8 +36,9 @@ J8b was item 1). J8b is a whole section; its first sub-item, packing, is done, t
   end-to-end break-even of converting to bitsliced form (inferred from two tables, not measured);
   GF(2^32) packing not profiled (32-word block vs 16 registers is a guess).
 
-Earlier: J2b (the default for `inv`; the GF(2^32) choice of throughput over latency still awaits
-the maintainer's confirmation, see `src/nimber_fast.md`), J8e and J8d, J8c, J8, J2a, nimber
+Earlier: J2b (the default for `inv`; the GF(2^32) choice of throughput over latency was
+confirmed by the maintainer on 2026-11-20, "I'd say do it that way"; how to change it later is in
+`src/nimber_fast.md`, "Default for inv"), J8e and J8d, J8c, J8, J2a, nimber
 GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to MathStruct. Details in git and the
 Backlog's *Done*.
 
