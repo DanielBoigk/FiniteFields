@@ -146,13 +146,23 @@ level(::Val{K}) where {K} = K
 """
     default_strategy(F)
 
-The strategy behind `*` and `inv` for `F`, chosen by the benchmarks in `bench/`
-(`src/nimber.md` and `src/nimber_fast.md`, "Measurements"): [`CLMul`](@ref) for GF(2^128) (it
-computes as [`MulTable`](@ref) on CPUs without `PCLMULQDQ`), [`MulTable`](@ref) for the other
-levels.
+The strategy behind `*` for `F`, chosen by the benchmarks in `bench/` (`src/nimber.md` and
+`src/nimber_fast.md`, "Measurements"): [`CLMul`](@ref) for GF(2^128) (it computes as
+[`MulTable`](@ref) on CPUs without `PCLMULQDQ`), [`MulTable`](@ref) for the other levels.
+`inv` has its own default, [`default_inv_strategy`](@ref).
 """
 default_strategy(::Type{<:Nimber}) = MulTable()
 default_strategy(::Type{GF2_128}) = CLMul()
+
+"""
+    default_inv_strategy(F)
+
+The strategy behind `inv` (and so `/`) for `F`. It is [`default_strategy`](@ref)`(F)` except
+where inversion is measurably faster with another strategy: [`LogTable16`](@ref) at GF(2^16) and
+GF(2^32) (one table lookup pair at GF(2^16), one norm step above it; `src/nimber_fast.md`,
+"Default for inv"). Override it for a field like `default_strategy`.
+"""
+default_inv_strategy(::Type{F}) where {F <: Nimber} = default_strategy(F)
 
 # --- The recursion, shared by all strategies --------------------------------------------------
 #
@@ -264,7 +274,7 @@ function mul end
     inverse(strategy::MulStrategy, a)
 
 The multiplicative inverse of `a` computed with `strategy`; throws `DivideError` for zero.
-`inv(a)` uses [`default_strategy`](@ref).
+`inv(a)` uses [`default_inv_strategy`](@ref).
 """
 function inverse end
 
@@ -278,5 +288,5 @@ function inverse end
     end
 
     Base.:*(a::N, b::N) where {N <: Nimber} = mul(default_strategy(N), a, b)
-    Base.inv(a::Nimber) = inverse(default_strategy(typeof(a)), a)
+    Base.inv(a::Nimber) = inverse(default_inv_strategy(typeof(a)), a)
 end

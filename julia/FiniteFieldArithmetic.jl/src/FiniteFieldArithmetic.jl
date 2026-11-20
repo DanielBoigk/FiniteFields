@@ -8,7 +8,8 @@ Arithmetic in finite fields, characteristic 2 first. Implemented so far: the nim
 
 Multiplication strategies ([`MulStrategy`](@ref): [`Recursive`](@ref), [`MulTable`](@ref),
 [`LogTable`](@ref), [`LogTable16`](@ref), [`CLMul`](@ref)) are reached through [`mul`](@ref) and
-[`inverse`](@ref); `*` and `inv` use [`default_strategy`](@ref).
+[`inverse`](@ref); `*` uses [`default_strategy`](@ref), `inv` (and `/`)
+[`default_inv_strategy`](@ref).
 
 Bulk operations (`src/bulk.md`): fast `rand!` for arrays, [`MulBy`](@ref) (multiplication by a
 constant), matrix products ([`matmul!`](@ref) with a [`MatMulStrategy`](@ref); `*` and

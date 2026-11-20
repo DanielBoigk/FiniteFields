@@ -12,52 +12,42 @@
 Implementation of approved items. Approved and done so far: J0, the nimber fields GF(2) …
 GF(2^128), J2a, J8 (maintainer, 2026-11-19: "please implement J8!"), J8c (2026-11-19: "I
 kinda want all three"), J8d (2026-11-20: "go with your J8d proposal, fix the GF(2^16)
-slowdown first") and J8e (2026-11-20: "Switch to the tables"). Ask before starting a
-backlog section the maintainer has not approved.
+slowdown first"), J8e (2026-11-20: "Switch to the tables") and J2b, the default for `inv`
+(2026-11-20: "Please implement the next item!", taken as approval of item 1 of the previous
+"Next" list). Ask before starting a backlog section the maintainer has not approved.
 
 ## Done last
 
-- **J8e — `c .* a` uses `MulBy` tables at GF(256) and below too:** `LazyMulBy(F)` is now the
-  default for every field; threshold 96 at GF(2), GF(4), GF(16), GF(256), measured with
-  `bench/constmul.jl small` (new option). Long arrays: 1.6–2.3× faster in `out .= c .* a`,
-  1.3–1.4× in `out .= c .* a .+ b`. `ScalarConstMul` stays available but is no default.
-- **J8d — `c .* a` uses `MulBy` tables by default from GF(2^16)** (`src/bulk.jl`, note
-  `src/bulk.md`, "Constant times array"), tests first (`test/constmul.jl`):
-  - `default_constmul_strategy`: `LazyMulBy(F)` from GF(2^16) up (thresholds 768 / 192 / 256 /
-    512 at GF(2^16) … GF(2^128), unchanged after three runs); GF(256) and below followed in J8e.
-    `EagerMulBy` and the J8c callable `ConstMul` are removed.
-  - The GF(2^16) slowdown is fixed: `LazyMulBy` is now a broadcast style (`ConstMulStyle`) whose
-    marker spreads to the fused expression; `copyto!`/`copy` decide once by the result's length
-    and rewrite the tree, each branch behind a `@noinline` barrier. Below the threshold it equals
-    Base's loop from 1024 elements (1.50 vs 1.50 ns), a few ns per call more below. Two simpler
-    designs (per-element flag, `Union` return) measured 1.80 and 1.74 ns; recorded in the note.
-  - From GF(2^16) up `c .* a` is now 2.4–9 times faster on long arrays, fused included.
-  - The maintainer's question about an allocation-free eager `EagerMul!`: measured
-    (`out .= m.(a); out .+= b` with a prepared `MulBy`), pays only at GF(256) in cache, loses
-    beyond the caches from GF(2^32) up; no new API, the answer is in the note.
-- **Verified:** `Pkg.test()` passes, 732,509 checks, Julia 1.13.1, x86_64-linux, Aqua and JET
-  included. Benchmarks: three full runs of `bench/constmul.jl` and one with `small`, on the noisy
-  VM.
-- **Not verified:** Julia 1.10; ARM; CI (not pushed to `full-ci`); the GF(2) … GF(16) thresholds
-  rest on one run; why inlining both branches slowed the loop (not inspected); interaction of `ConstMulStyle` with
-  other packages' broadcast styles (GPU arrays, StaticArrays): it wraps their style and hands the
-  rewritten tree back to it, tested only with Base arrays.
+- **J2b — a separate default for `inv`:** `default_inv_strategy(F)` (`src/nimber.jl`,
+  `src/nimber_fast.jl`) is behind `inv` and so `/`; it equals `default_strategy(F)` except
+  `LogTable16()` at GF(2^16) and GF(2^32). `*` is unchanged. Tests first (`test/inv_default.jl`,
+  JET on `inv` and `/`); the suite gained `inv latency` chains and `default (inv)` entries.
+  Measurements and reasoning in `src/nimber_fast.md`, "Default for inv":
+  - GF(2^16): `inv` 2.7× the throughput (0.85 vs 2.3–2.5 ns) and ~30% less latency.
+  - GF(2^32): **a trade-off for the maintainer to confirm.** 1.4–1.9× the throughput (8–11 vs
+    15 ns) but 20–50% more latency in a chain of dependent inversions (39–51 vs 31–33 ns).
+    Throughput was chosen (the bulk case); say if you prefer `MulTable` there.
+  - GF(2^64), GF(2^128): unchanged, `LogTable16` is not faster there.
+- **Verified:** `Pkg.test()` passes, 732,584 checks, Julia 1.13.1, x86_64-linux, Aqua and JET
+  included. Benchmarks: the `inv` groups, three runs in one process, on the noisy VM.
+- **Not verified:** Julia 1.10; ARM; CI (not pushed to `full-ci`); the full benchmark suite was
+  not rerun (only the `inv` groups); why `LogTable16`'s inversion has more latency at GF(2^32)
+  (not profiled).
 
-Earlier: J8c (strategies and measurements for `c .* a`), J8 (bulk operations), J2a, nimber
-GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to MathStruct. Details in git.
+Earlier: J8e and J8d (`MulBy` tables behind `c .* a` at every field), J8c, J8 (bulk
+operations), J2a, nimber GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to MathStruct.
+Details in git and the Backlog's *Done*.
 
 ## Next (proposals, need the maintainer's go)
 
-1. **Defaults for `inv`:** `LogTable16` inverts about 2.3 times faster at GF(2^16) and 1.9 times at
-   GF(2^32), but its products have about twice the latency of `MulTable`. A separate default
-   for `inv` (`default_inv_strategy`) would take both. Decide whether that API is wanted.
-2. **J8b** (Backlog): faster bitsliced packing, cache blocking for large matrices, bitsliced
+1. **J8b** (Backlog): faster bitsliced packing, cache blocking for large matrices, bitsliced
    matrix products, GPU kernels.
-3. **FF-P1** (`Problems.md`): `CLMul` at GF(2^64) element by element; investigate on a quiet
+2. **FF-P1** (`Problems.md`): `CLMul` at GF(2^64) element by element; investigate on a quiet
    machine. (Matrix products at GF(2^64) no longer depend on it.)
-4. **ARM `PMULL`** for `CLMul` and `CLMulMatMul` (needs an ARM machine to test).
-5. **J1a/J1b** — Conway representation and arbitrary $n$ (e.g. GF(2^7)); J3 (inversion), and
-   linear algebra on top of the matrix products (rank, solving; V5).
+3. **ARM `PMULL`** for `CLMul` and `CLMulMatMul` (needs an ARM machine to test).
+4. **J1a/J1b** — Conway representation and arbitrary $n$ (e.g. GF(2^7)); J3 (inversion:
+   Itoh–Tsujii and extended Euclid as further `inv` strategies, now that `inv` has its own
+   default), and linear algebra on top of the matrix products (rank, solving; V5).
 
 ## Decisions in force (maintainer, 2026-11-19)
 

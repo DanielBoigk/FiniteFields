@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J2a, J8, J8c, J8d, J8e); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J2a, J2b, J8, J8c, J8d, J8e); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -125,6 +125,10 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   the recursion base) and `CLMul` (polynomial basis with `PCLMULQDQ`, change of basis by byte
   tables); `CLMul` is the default for GF(2^128) (about 1.5 times faster than `MulTable`); details
   and measurements in `src/nimber_fast.md`, open question FF-P1.
+- **J2b — A separate default for `inv`** (2026-11-20): `default_inv_strategy(F)` behind `inv`
+  and `/`; `LogTable16` at GF(2^16) (2.7× throughput, less latency) and GF(2^32) (1.4–1.9×
+  throughput, 20–50% more latency: chosen for throughput, maintainer to confirm), as `*`
+  elsewhere. `inv latency` benchmarks added. Details in `src/nimber_fast.md`, "Default for inv".
 - **J8 — Bulk and array operations** (2026-11-19): fast `rand!` for arrays, broadcasting (tested,
   no code needed), `MulBy` (multiplication by a constant as byte tables), matrix products
   (`ScalarMatMul`, `TableMatMul`, `CLMulMatMul` with one reduction per entry; default

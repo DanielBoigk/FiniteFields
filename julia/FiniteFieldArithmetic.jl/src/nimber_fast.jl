@@ -81,6 +81,9 @@ const NIM16_LOG_HALF = ntuple(k -> NIM16_LOG[(1 << ((1 << (k - 1)) - 1)) + 1], 5
         (@inbounds NIM16_EXP[65535 - Int(NIM16_LOG[Int(a % UInt16) + 1]) + 1]) % T
 end
 
+# inv uses LogTable16 where it measured faster than the default of `*` (nimber_fast.md).
+default_inv_strategy(::Type{<:Union{GF2_16, GF2_32}}) = LogTable16()
+
 # --- Carry-less multiplication --------------------------------------------------------------
 
 const PCLMUL = Ref(false)

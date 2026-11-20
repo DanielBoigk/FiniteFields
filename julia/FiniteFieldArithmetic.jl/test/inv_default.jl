@@ -29,7 +29,7 @@ end
         @test all(isone(x * inv(x)) for x in xs)
         y = rand(rng, F)
         @test all(y / x == y * inverse(Recursive(), x) for x in xs)
-        @test inv.(xs) == inverse.(Recursive(), xs)
+        @test inv.(xs) == inverse.(Ref(Recursive()), xs)
         @test_throws DivideError inv(zero(F))
         @test (@inferred inv(one(F))) isa F
         @test (@inferred default_inv_strategy(F)) isa FiniteFieldArithmetic.MulStrategy

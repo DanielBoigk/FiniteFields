@@ -61,8 +61,10 @@ $a^{-1} = (a_1 N^{-1})\,F + (a_0 \oplus a_1) N^{-1}$.
   to the storage type of the level below (`halftype`: `UInt128` → `UInt64` → … → `UInt8`).
   Tables are computed with `Recursive` at precompile time; because the subfields are nested, the
   GF(256) tables serve every level up to GF(256) directly and are the base of the larger ones.
-- `*` and `inv` use `default_strategy(N) = MulTable()` up to GF(2^64), chosen from the
-  measurements below; GF(2^128) uses `CLMul` since J2a (`src/nimber_fast.md`).
+- `*` uses `default_strategy(N) = MulTable()` up to GF(2^64), chosen from the
+  measurements below; GF(2^128) uses `CLMul` since J2a (`src/nimber_fast.md`). `inv` uses
+  `default_inv_strategy(N)`: the same, except `LogTable16` at GF(2^16) and GF(2^32)
+  (`src/nimber_fast.md`, "Default for inv").
 - Powers reduce the exponent modulo $2^n - 1$ in the storage type (also for `UInt128`, and for
   `BigInt` exponents), see `binaryfield.md`.
 - Mixed levels promote to the larger one (`promote_rule`); conversion to a smaller level checks

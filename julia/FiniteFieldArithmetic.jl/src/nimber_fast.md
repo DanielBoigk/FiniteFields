@@ -117,8 +117,45 @@ GF(2^128) 64–72 against 42–46 ns throughput and 63–64 against 47–49 ns l
 - `LogTable16` is not a default. It has the best throughput at GF(2^16) and the best inversion at
   GF(2^16) and GF(2^32) (about 2.3 and 1.9 times faster), but its latency is about twice
   `MulTable`'s, presumably because of the two dependent lookups (log, then exp) in 384 KiB of
-  tables, which do not fit in L1 (not profiled). A separate default for
-  `inv` is a proposal for the maintainer.
+  tables, which do not fit in L1 (not profiled). `inv` got its own default instead, see
+  "Default for inv" below.
+
+## Default for inv
+
+`inv` (and so `/`) uses `default_inv_strategy(F)`, separate from `default_strategy(F)` behind `*`
+(maintainer, 2026-11-20). It equals `default_strategy(F)` except at GF(2^16) and GF(2^32), where
+it is `LogTable16()`. Tests: `test/inv_default.jl` (defaults per level; `inv` and `/` against
+`Recursive`, exhaustively on GF(2^16)); `test/jet.jl` checks `inv` and `/`.
+
+Measured with the `inv` groups of `bench/benchmarks.jl` (new: an `inv latency` chain
+`x ← inv(x) + y` per strategy, and `default (inv)`), 2026-11-20, Julia 1.13.1, the same cloud VM,
+4096 elements; median ns per element, lowest and highest of three runs in one process (script:
+the suite filtered to the keys starting with `inv`, three `tune!`/`run` rounds of 1 s each).
+
+| field | strategy | inv throughput | inv latency |
+|---|---|---|---|
+| GF(2^16) | MulTable | 2.3–2.5 | 13.3–14.9 |
+| | **LogTable16** (default) | **0.85–0.95** | **9.5–10.1** |
+| GF(2^32) | MulTable | 14.7–15.5 | **31–33** |
+| | **LogTable16** (default) | **8.0–10.9** | 39–51 |
+| GF(2^64) | **MulTable** (default) | 56–60 | 61–62 |
+| | LogTable16 | 59–60 | 93–101 |
+| | CLMul | 59–61 | 60–62 |
+| GF(2^128) | MulTable | 155–166 | 155–169 |
+| | LogTable16 | 206–226 | 218–224 |
+| | **CLMul** (default) | 143–152 | 150–164 |
+
+`default (inv)` measured the same as its strategy in every row (e.g. GF(2^16) 0.85–0.86
+throughput, 9.5–10.1 latency).
+
+- **GF(2^16):** `LogTable16` wins both: 2.7 times the throughput, about 30% less latency. Its
+  inverse is one lookup pair, `exp(65535 - log a)`, against the norm recursion down to GF(256).
+- **GF(2^32): a trade-off.** `LogTable16` has 1.4–1.9 times the throughput but 20–50% more
+  latency than `MulTable`. Throughput (independent inverses, the bulk case) was chosen; a chain of
+  dependent inversions is faster with `inverse(MulTable(), x)`. Presumably the latency comes from
+  the three GF(2^16) products of the norm step, each two dependent lookups in tables beyond L1
+  (as for `*`, see above); not profiled.
+- **GF(2^64), GF(2^128):** unchanged; `LogTable16` is not faster there.
 
 **Breakdown of `CLMul`** (`bench/clmul_parts.jl`): at GF(2^128) `to_poly` takes 8.3–9.5 ns and
 `poly_mulmod` 4.2 ns, so the three conversions are about 28 of the ~46 ns. At GF(2^64) `to_poly`
