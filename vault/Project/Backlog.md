@@ -110,6 +110,16 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
   tables). Exact, not fast; sizes grow with the lcm. The nimber quadratic closure (all
   $2^{2^k}$) is the cheap special case. After J1–J3. Lean counterpart:
   `AlgebraicClosure (ZMod 2)`.
+- **J9 — Smallest field of an element** (proposed 2026-11-20, not approved): `minimal_level(x)`,
+  `minimal_degree(x)` $= [\mathbb{F}_2(x) : \mathbb{F}_2]$ and `reduce_field(x)` (the element
+  in the smallest field that contains it). For nimbers no field arithmetic is needed: every
+  subfield of $\mathbb{F}_{2^{2^K}}$ is some $\mathbb{F}_{2^{2^j}}$, which is a nimber level, nested
+  as integers, so the smallest level is the smallest $j$ with $x < 2^{2^j}$ (from the bit length).
+  `reduce_field` returns a type that depends on the value: the maintainer allows it to be
+  type-unstable and outside DispatchDoctor's `@stable` (2026-11-20). For Conway and polynomial
+  representations (J1a, J1b) and $\overline{\mathbb{F}}_2$ (J7): the smallest $d$ with
+  $x^{2^d} = x$, then the map down to $\mathbb{F}_{2^d}$ through the Conway compatibility; after
+  those sections. Tests first, as usual.
 
 ## Sorry ledger
 

@@ -57,7 +57,8 @@ unnecessary and help small $q \ge 3$; an expectation, `src/bulk.md`); faster sma
 products (preallocated temporaries, a `BitslicedMatrix` type keeping the planes; would lower the
 thresholds); **FF-P1** (`CLMul` at GF(2^64) element by element); **J1a/J1b** (Conway
 representation, arbitrary $n$); **J3** (Itoh–Tsujii, extended Euclid as `inv` strategies);
-linear algebra on the matrix products (V5). Seen earlier, not measured: in the scalar GF(2^16)
+linear algebra on the matrix products (V5); **J9** (`minimal_level`, `minimal_degree`,
+`reduce_field`; for nimbers from the bit length, `reduce_field` may be type-unstable). Seen earlier, not measured: in the scalar GF(2^16)
 `LazyMulBy` loop the size of the global `NIM256_MUL` table is reloaded every element.
 
 ## Decisions in force (maintainer, 2026-11-19)
