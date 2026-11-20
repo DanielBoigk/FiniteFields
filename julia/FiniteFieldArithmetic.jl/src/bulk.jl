@@ -102,12 +102,12 @@ struct ScalarConstMul <: ConstMulStrategy end
     LazyMulBy(threshold::Int)
     LazyMulBy(F) = LazyMulBy(mulby_threshold(F))
 
-For an argument of at least `threshold` elements, `c .* a` becomes the lazy broadcast
-`MulBy(c).(a)`: the byte tables are built once per broadcast, every product is a table lookup,
-and fused expressions stay fused. Below the threshold it is Base's broadcast of `*`
-([`ScalarConstMul`](@ref)), so short arrays cost nothing extra. The result is one of two
-`Broadcasted` types, which the compiler splits. The default from ``\\mathbb{F}_{2^{16}}`` up,
-with the measured break-even [`mulby_threshold`](@ref).
+`c .* a` stays lazy and is decided when the (fused) broadcast is materialised: if the result has
+at least `threshold` elements, every product with `c` is a lookup in the byte tables of
+[`MulBy`](@ref)`(c)`, built once per broadcast; below, it is Base's broadcast of `*`
+([`ScalarConstMul`](@ref)), so short arrays cost nothing extra. Fused expressions stay fused.
+Implemented as a broadcast style (`ConstMulStyle`) that wraps the style of the arguments. The
+default from ``\\mathbb{F}_{2^{16}}`` up, with the measured break-even [`mulby_threshold`](@ref).
 """
 struct LazyMulBy <: ConstMulStrategy
     threshold::Int
@@ -158,12 +158,71 @@ const_mul_broadcasted(s::ConstMulStrategy, a::ArrayOrLazy, c::Nimber, args::Tupl
 # `args` is the argument tuple as written, (c, a) or (a, c); Base's broadcast keeps its order.
 const_mul_broadcasted(::ScalarConstMul, ::Nimber, ::ArrayOrLazy, args::Tuple) =
     Broadcast.broadcasted(Broadcast.combine_styles(args...), *, args...)
-# Two return types on purpose: Base's broadcast below the threshold (a per-element branch on a
-# flag instead cost 19–27% at GF(2^16) in fused loops, J8c), tables above.
-function const_mul_broadcasted(s::LazyMulBy, c::Nimber, a::ArrayOrLazy, args::Tuple)
-    length(a) < s.threshold && return const_mul_broadcasted(ScalarConstMul(), c, a, args)
-    return Broadcast.broadcasted(MulBy(c), a)
+const_mul_broadcasted(s::LazyMulBy, c::Nimber, a::ArrayOrLazy, args::Tuple) =
+    Broadcast.Broadcasted{ConstMulStyle{typeof(Broadcast.combine_styles(args...))}}(
+        ConstTimes(c, s.threshold), (a,))
+
+# --- LazyMulBy as a broadcast style ---
+#
+# The decision between scalar products and tables must be one branch with two concrete call
+# sites around the whole fused loop: a Union of two Broadcasted types returned by the hook (split
+# by the compiler at materialize!) measured 1.74 ns per element at GF(2^16) fused, an explicit
+# branch 1.50, Base's scalar loop 1.50 (src/bulk.md). The hook therefore returns a marker node,
+# `ConstTimes`, in the style ConstMulStyle{S} (S: the style the arguments would have had). The
+# style propagates to every enclosing node of the fused expression; `copyto!` and `copy` then
+# compare the length of the result with the thresholds once and rewrite the tree to style S, with
+# each marker replaced by Base's `*` broadcast or by a broadcast of MulBy(c).
+
+# c ⊗ x, and the threshold of LazyMulBy. Callable, so an unrewritten tree is still correct.
+struct ConstTimes{N <: Nimber} <: Function
+    c::N
+    threshold::Int
 end
+@inline (t::ConstTimes)(x) = t.c * x
+
+struct ConstMulStyle{S <: Broadcast.BroadcastStyle} <: Broadcast.BroadcastStyle end
+
+constmul_style(::Type{S}) where {S} = ConstMulStyle{S}()
+Broadcast.BroadcastStyle(::ConstMulStyle{S}, o::Broadcast.BroadcastStyle) where {S} =
+    constmul_style(typeof(Broadcast.result_style(S(), o)))
+Broadcast.BroadcastStyle(o::Broadcast.BroadcastStyle, ::ConstMulStyle{S}) where {S} =
+    constmul_style(typeof(Broadcast.result_style(o, S())))
+Broadcast.BroadcastStyle(::ConstMulStyle{S}, ::ConstMulStyle{R}) where {S, R} =
+    constmul_style(typeof(Broadcast.result_style(S(), R())))
+# (Base's Unknown style would otherwise win against ours; keep ours, wrapping it.)
+Broadcast.BroadcastStyle(::ConstMulStyle{S}, ::Broadcast.Unknown) where {S} = ConstMulStyle{S}()
+Broadcast.BroadcastStyle(::Broadcast.Unknown, ::ConstMulStyle{S}) where {S} = ConstMulStyle{S}()
+
+# The rewrite: Val(true) uses tables at every marker, Val(false) Base's `*`.
+unwrap_constmul(x, ::Val) = x
+unwrap_constmul(bc::Broadcast.Broadcasted{ConstMulStyle{S}}, v::Val) where {S} =
+    Broadcast.Broadcasted{S}(unwrap_node(bc.f, unwrap_args(bc.args, v), v)..., bc.axes)
+unwrap_args(args::Tuple, v::Val) = map(x -> unwrap_constmul(x, v), args)
+# (function, arguments) of a rewritten node
+unwrap_node(f, args::Tuple, ::Val) = (f, args)
+unwrap_node(t::ConstTimes, args::Tuple, ::Val{true}) = (MulBy(t.c), args)
+unwrap_node(t::ConstTimes, args::Tuple, ::Val{false}) = (*, (t.c, args...))
+
+# The largest threshold of the markers in a tree (tables are used only if the result reaches it).
+max_threshold(_) = 0
+max_threshold(bc::Broadcast.Broadcasted) = max(node_threshold(bc.f), max_threshold_args(bc.args))
+max_threshold_args(args::Tuple) = mapreduce(max_threshold, max, args; init = 0)
+node_threshold(_) = 0
+node_threshold(t::ConstTimes) = t.threshold
+
+# Each branch behind a function barrier: with both loops inlined into one method, the fused loop
+# at GF(2^16) ran at 1.63–1.65 ns per element against 1.47–1.49 for Base's (bench, src/bulk.md);
+# with the barrier, equal from 1024 elements, about 9 ns more per call below.
+@noinline unwrapped_copyto!(dest::AbstractArray, bc::Broadcast.Broadcasted, v::Val) =
+    copyto!(dest, Broadcast.instantiate(unwrap_constmul(bc, v)))
+@noinline unwrapped_copy(bc::Broadcast.Broadcasted, v::Val) =
+    copy(Broadcast.instantiate(unwrap_constmul(bc, v)))
+
+Base.copyto!(dest::AbstractArray, bc::Broadcast.Broadcasted{<:ConstMulStyle}) =
+    length(dest) >= max_threshold(bc) ? unwrapped_copyto!(dest, bc, Val(true)) :
+                                        unwrapped_copyto!(dest, bc, Val(false))
+Base.copy(bc::Broadcast.Broadcasted{<:ConstMulStyle}) =
+    length(bc) >= max_threshold(bc) ? unwrapped_copy(bc, Val(true)) : unwrapped_copy(bc, Val(false))
 
 # The hooks. Only arrays whose element type is that of the constant, and lazy arguments (whose
 # element type is not known here; MulBy falls back to `*` for other operands).

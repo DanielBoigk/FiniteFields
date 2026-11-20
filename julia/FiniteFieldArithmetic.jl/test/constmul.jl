@@ -1,8 +1,9 @@
 # Multiplication of an array by a constant in broadcasts (backlog J8c, J8d): `c .* a` and
 # `a .* c` go through `default_constmul_strategy`, which picks one of
 # - `ScalarConstMul()`: the scalar `*` element by element (Base's behaviour; default up to GF(256));
-# - `LazyMulBy(t)`: a lazy broadcast of `MulBy(c)` for arguments of at least `t` elements, and
-#   Base's broadcast below, so fusion is kept (default from GF(2^16), `t = mulby_threshold(F)`).
+# - `LazyMulBy(t)`: a marker in its own broadcast style; when the fused broadcast is materialised,
+#   the products use `MulBy(c)` if the result has at least `t` elements and Base's `*` otherwise
+#   (default from GF(2^16), `t = mulby_threshold(F)`).
 #
 # Oracle: `mul(Recursive(), …)`, independent of both. The strategy is switched by redefining
 # `default_constmul_strategy` for one field (the documented way), and every check then runs in
@@ -68,8 +69,9 @@ end
     # the default reaches the dot syntax: long arrays use tables, short ones Base's broadcast
     c = GF2_32(0x53)
     long, short = rand(rng, GF2_32, mulby_threshold(GF2_32)), rand(rng, GF2_32, 3)
-    @test Base.Broadcast.broadcasted(*, c, long).f isa MulBy
-    @test Base.Broadcast.broadcasted(*, c, short).f === (*)
+    @test Base.Broadcast.broadcasted(*, c, long) isa
+          Base.Broadcast.Broadcasted{<:FiniteFieldArithmetic.ConstMulStyle}
+    @test c .* short == cm_refmul.(Ref(c), short)
     @test c .* long == cm_refmul.(Ref(c), long)
 end
 
@@ -94,29 +96,37 @@ end
     end
 end
 
-@testset "lazy strategy: tables only above the threshold, $F" for F in CM_LEVELS
-    c, a = rand(rng, F), rand(rng, F, 64)
+@testset "lazy strategy: decided once per broadcast, by the result's length, $F" for F in CM_LEVELS
+    M = FiniteFieldArithmetic
+    c, a, b = rand(rng, F), rand(rng, F, 64), rand(rng, F, 64)
     bc = const_mul_broadcasted(LazyMulBy(64), c, a)
-    @test bc isa Base.Broadcast.Broadcasted
-    m = bc.f
-    @test m isa MulBy{F}                                      # 64 ≥ 64: tables
-    below = const_mul_broadcasted(LazyMulBy(65), c, a)
-    @test below.f === (*) && below.args === (c, a)              # Base's own broadcast
-    @test const_mul_broadcasted(LazyMulBy(65), a, c, (a, c)).args === (a, c)  # order kept
-    # The result is one of two Broadcasted types, a small Union that the compiler splits.
-    rt = Base.return_types(const_mul_broadcasted, Tuple{LazyMulBy, F, Vector{F}})
-    @test length(rt) == 1 && rt[1] == Union{typeof(bc), typeof(below)}
-    lazy = Base.Broadcast.broadcasted(+, a, a)                # a lazy argument of length 64
-    @test const_mul_broadcasted(LazyMulBy(64), c, lazy).f isa MulBy{F}
-    @test const_mul_broadcasted(LazyMulBy(65), c, lazy).f === (*)
-    for x in rand(rng, F, 50)
-        @test m(x) == cm_refmul(c, x)
+    @test bc isa Base.Broadcast.Broadcasted{<:M.ConstMulStyle}
+    @test bc.f isa M.ConstTimes{F} && bc.f(a[1]) == cm_refmul(c, a[1])
+    # type-stable: the threshold does not change the type
+    @test typeof(const_mul_broadcasted(LazyMulBy(65), c, a)) == typeof(bc)
+    @test Base.return_types(const_mul_broadcasted, Tuple{LazyMulBy, F, Vector{F}}) == [typeof(bc)]
+    # the style spreads to the enclosing fused expression
+    fused = Base.Broadcast.broadcasted(+, bc, b)
+    @test fused isa Base.Broadcast.Broadcasted{<:M.ConstMulStyle}
+    @test M.max_threshold(fused) == 64
+    @test M.max_threshold(Base.Broadcast.broadcasted(+, bc, const_mul_broadcasted(LazyMulBy(9), c, b))) == 64
+    # the two rewrites: tables, or Base's broadcast of `*` (style DefaultArrayStyle again)
+    t = M.unwrap_constmul(fused, Val(true))
+    @test t.args[1].f isa MulBy{F} && t.args[1].args == (a,)
+    @test t isa Base.Broadcast.Broadcasted{Base.Broadcast.DefaultArrayStyle{1}}
+    f = M.unwrap_constmul(fused, Val(false))
+    @test f.args[1].f === (*) && f.args[1].args == (c, a)
+    @test Base.Broadcast.materialize(t) == Base.Broadcast.materialize(f) == cm_refmul.(Ref(c), a) .+ b
+    # the result's length decides: a short vector against a wide matrix gets tables
+    v, W = rand(rng, F, 3), rand(rng, F, 3, 100)
+    with_constmul(F, LazyMulBy(300)) do
+        @test c .* v .+ W == cm_refmul.(Ref(c), v) .+ W
     end
-    @test m(GF2(1)) == c                                      # other operand types: scalar `*`
+    # MulBy falls back to the scalar product for other operand types
+    @test MulBy(c)(GF2(1)) == c
 end
 
-# Allocations: the scalar strategy and the lazy one below the threshold (a Union result, split by
-# the compiler) allocate nothing in fused
+# Allocations: the scalar strategy and the lazy one below the threshold allocate nothing in fused
 # expressions; above the threshold the lazy one allocates its tables only (256 B at GF(256) …
 # 64 KiB at GF(2^128)).
 @testset "allocations, $F" for F in CM_LEVELS
