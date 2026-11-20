@@ -96,10 +96,15 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
 - **J6 — Constant time:** not a goal. Document which strategies happen to be constant-time; do not
   engineer for it.
-- **J8b — Bulk, remaining** (after J8; approved 2026-11-20, packing done, see *Done*):
-  bitsliced vectors above GF(2^32) and a bitsliced matrix product; cache blocking of
-  the matrix products; ARM `PMULL`; GPU kernels (needs a GPU to test); why inlining both branches of `LazyMulBy`'s
-  `copyto!` slowed the loop (J8d, not inspected).
+- **J8b — Bulk, remaining** (after J8; approved 2026-11-20; packing and the cache-blocking
+  measurement done, see *Done*): bitsliced vectors above GF(2^32) and a bitsliced matrix
+  product; ARM `PMULL`; GPU kernels (needs a GPU to test); why inlining both branches of
+  `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
+- **J8f — Fewer carry-less products in `CLMulMatMul`** (proposed 2026-11-20, not approved): the
+  matrix product is bound by `PCLMULQDQ` throughput, not by the caches (`src/bulk.md`, "Larger
+  sizes and cache blocking"). Two terms per 64-bit product at GF(2^16) ($a_1 + a_2x^{32}$ times
+  $b_2 + b_1x^{32}$); `VPCLMULQDQ` (four products per AVX-512 instruction) at every level.
+  Tests and benchmark first, as usual.
 - **J7 — $\overline{\mathbb{F}}_2$ ("$n = \infty$"):** every element lives in some finite
   $\mathbb{F}_{2^n}$, so elements carry their degree and an operation embeds both operands into
   $\mathbb{F}_{2^{\operatorname{lcm}(m,n)}}$ through Conway polynomials (pseudo-Conway beyond the
@@ -129,6 +134,11 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   and `/`; `LogTable16` at GF(2^16) (2.7× throughput, less latency) and GF(2^32) (1.4–1.9×
   throughput, 20–50% more latency: chosen for throughput, confirmed by the maintainer 2026-11-20), as `*`
   elsewhere. `inv latency` benchmarks added. Details in `src/nimber_fast.md`, "Default for inv".
+- **J8b, cache blocking — measured, not adopted** (2026-11-20): `bench/matmul_sizes.jl` (64 …
+  2048): no slowdown with size on the development VM (260 MiB L3); a blocked `CLMulMatMul` with
+  register tiles (1×1 … 4×2) at best tied the plain loop, which is bound by `PCLMULQDQ`
+  throughput. Reverted; the code is in git (`79a7ab8`, `20b8cba`). A larger-size test added.
+  Details in `src/bulk.md`, "Larger sizes and cache blocking".
 - **J8b, first part — `BitslicedVector` packing by bit-matrix transposes** (2026-11-20):
   delta swaps on tuples of $n$ words (`transpose64!` for the full $64 \times 64$ case); pack
   0.09–1.4 ns and unpack 0.10–0.83 ns per element, 3.8–7.1 times faster from GF(16) up

@@ -271,28 +271,14 @@ struct TableMatMul <: MatMulStrategy end
 
 """
     CLMulMatMul()
-    CLMulMatMul(kc, mc, nc)
 
 The product in the polynomial basis of [`CLMul`](@ref) (``\\mathbb{F}_{2^n}``, ``n \\ge 16``): both
 matrices are converted once, every entry of the result is a sum of carry-less products, which is
 reduced modulo ``f`` and converted back once (reduction is linear, so it commutes with the sum).
 Needs `PCLMULQDQ` ([`has_pclmul`](@ref)); without it it computes as
 `ScalarMatMul(MulTable())`, and up to ``\\mathbb{F}_{256}`` as [`TableMatMul`](@ref).
-
-The loops are blocked for the caches (J8b): the inner dimension in blocks of `kc`, the rows of
-the result in blocks of `mc`, its columns in blocks of `nc`; each block of the sum is reduced
-once. A block size of `0` (the default) is chosen per field (`src/bulk.md`, "Cache blocking").
 """
-struct CLMulMatMul <: MatMulStrategy
-    kc::Int
-    mc::Int
-    nc::Int
-    function CLMulMatMul(kc::Integer, mc::Integer, nc::Integer)
-        min(kc, mc, nc) >= 0 || throw(ArgumentError("CLMulMatMul: block sizes must be ≥ 0"))
-        return new(kc, mc, nc)
-    end
-end
-CLMulMatMul() = CLMulMatMul(0, 0, 0)
+struct CLMulMatMul <: MatMulStrategy end
 
 """
     default_matmul_strategy(F)
@@ -355,7 +341,7 @@ end
         return C
     end
 
-    function matmul_add!(s::CLMulMatMul, C::StridedVecOrMat{N}, A::StridedMatrix{N},
+    function matmul_add!(::CLMulMatMul, C::StridedVecOrMat{N}, A::StridedMatrix{N},
                          B::StridedVecOrMat{N}) where {K, T, N <: Nimber{K, T}}
         K <= 3 && return matmul_add!(TableMatMul(), C, A, B)
         has_pclmul() || return matmul_add!(ScalarMatMul(MulTable()), C, A, B)
@@ -369,113 +355,11 @@ end
         @inbounds for j in 1:q, k in 1:p
             Bp[k, j] = to_poly(bits(B[k, j]))
         end
-        Cp = zeros(T, m, q)                   # the result in the polynomial basis
-        kc, mc, nc = clmul_blocks(s, T)
-        for j0 in 1:nc:q, k0 in 1:kc:p, i0 in 1:mc:m
-            clmul_block!(Cp, At, Bp, k0:min(k0 + kc - 1, p), i0:min(i0 + mc - 1, m),
-                         j0:min(j0 + nc - 1, q))
-        end
         @inbounds for j in 1:q, i in 1:m
-            C[i, j] += unsafe_frombits(N, from_poly(Cp[i, j]))
+            r = poly_dot(view(At, :, i), view(Bp, :, j))
+            C[i, j] += unsafe_frombits(N, from_poly(r))
         end
         return C
-    end
-end
-
-# Block sizes of CLMulMatMul; 0 means the default of the storage type (src/bulk.md).
-clmul_blocks(s::CLMulMatMul, ::Type{T}) where {T} =
-    (s.kc > 0 ? s.kc : CLMUL_KC, s.mc > 0 ? s.mc : CLMUL_MC, s.nc > 0 ? s.nc : CLMUL_NC)
-const CLMUL_KC = typemax(Int)
-const CLMUL_MC = typemax(Int)
-const CLMUL_NC = typemax(Int)
-
-# The register tile of the micro-kernel: MI rows of the result times MJ columns, so each loaded
-# factor takes part in MJ (resp. MI) products.
-const CLMUL_TILE = (2, 2)
-
-@stable default_mode = "error" begin
-    # Unreduced sums of carry-less products in F_2[x], per storage type: `clacc_zero(z)` is the
-    # empty sum, `clacc_add` adds a b, `clacc_reduce(acc, z)` reduces modulo f (z: a value of the
-    # storage type; a `::Type{T}` argument was not specialised under @stable and allocated). Products of n-bit operands have
-    # degree < 2n - 1, so 64 bits hold them for n ≤ 32, 128 bits for n = 64; for n = 128 the three
-    # Karatsuba partial products are summed separately (Karatsuba is bilinear) and combined once.
-    @inline clacc_zero(::T) where {T <: Union{UInt16, UInt32}} = zero(UInt64)
-    @inline clacc_add(acc::UInt64, a::T, b::T) where {T <: Union{UInt16, UInt32}} =
-        acc ⊻ (clmul64_unchecked(a % UInt64, b % UInt64) % UInt64)
-    @inline clacc_reduce(acc::UInt64, ::T) where {T <: Union{UInt16, UInt32}} =
-        poly_reduce((acc >> (8 * sizeof(T))) % T, acc % T)
-
-    @inline clacc_zero(::UInt64) = zero(UInt128)
-    @inline clacc_add(acc::UInt128, a::UInt64, b::UInt64) = acc ⊻ clmul64_unchecked(a, b)
-    @inline clacc_reduce(acc::UInt128, ::UInt64) =
-        poly_reduce((acc >> 64) % UInt64, acc % UInt64)
-
-    @inline clacc_zero(::UInt128) = (zero(UInt128), zero(UInt128), zero(UInt128))
-    @inline function clacc_add(acc::NTuple{3, UInt128}, x::UInt128, y::UInt128)
-        x1, x0 = (x >> 64) % UInt64, x % UInt64
-        y1, y0 = (y >> 64) % UInt64, y % UInt64
-        return (acc[1] ⊻ clmul64_unchecked(x0, y0), acc[2] ⊻ clmul64_unchecked(x1, y1),
-                acc[3] ⊻ clmul64_unchecked(x0 ⊻ x1, y0 ⊻ y1))
-    end
-    @inline function clacc_reduce(acc::NTuple{3, UInt128}, ::UInt128)
-        l, h, m = acc
-        m ⊻= l ⊻ h
-        return poly_reduce(h ⊻ (m >> 64), l ⊻ (m << 64))
-    end
-
-    # Cp[is, js] ⊻= (A B)[is, js] restricted to the terms ks, in the polynomial basis: At holds A
-    # transposed, Bp holds B. Tiles of CLMUL_TILE, then the leftover rows and columns.
-    function clmul_block!(Cp::Matrix{T}, At::Matrix{T}, Bp::Matrix{T}, ks::UnitRange{Int},
-                          is::UnitRange{Int}, js::UnitRange{Int}) where {T <: Unsigned}
-        MI, MJ = CLMUL_TILE
-        i1, j1 = last(is), last(js)
-        j = first(js)
-        while j + MJ - 1 <= j1
-            i = first(is)
-            while i + MI - 1 <= i1
-                clmul_tile!(Cp, At, Bp, ks, i, j, Val(MI), Val(MJ))
-                i += MI
-            end
-            while i <= i1
-                clmul_tile!(Cp, At, Bp, ks, i, j, Val(1), Val(MJ))
-                i += 1
-            end
-            j += MJ
-        end
-        while j <= j1
-            i = first(is)
-            while i + MI - 1 <= i1
-                clmul_tile!(Cp, At, Bp, ks, i, j, Val(MI), Val(1))
-                i += MI
-            end
-            while i <= i1
-                clmul_tile!(Cp, At, Bp, ks, i, j, Val(1), Val(1))
-                i += 1
-            end
-            j += 1
-        end
-        return Cp
-    end
-
-    # One step of the tile: acc[c][r] += a[r] b[c]. A function of its own, so that `acc` is an
-    # argument here: a closure over the loop variable `acc` boxed it (1000 times slower).
-    @inline clacc_tile_add(acc::NTuple{MJ, NTuple{MI, X}}, a::NTuple{MI, T},
-                           b::NTuple{MJ, T}) where {MI, MJ, X, T <: Unsigned} =
-        ntuple(c -> ntuple(r -> clacc_add(acc[c][r], a[r], b[c]), Val(MI)), Val(MJ))
-
-    @inline function clmul_tile!(Cp::Matrix{T}, At::Matrix{T}, Bp::Matrix{T},
-                                 ks::UnitRange{Int}, i::Int, j::Int, ::Val{MI},
-                                 ::Val{MJ}) where {T <: Unsigned, MI, MJ}
-        acc = ntuple(_ -> ntuple(_ -> clacc_zero(zero(T)), Val(MI)), Val(MJ))
-        @inbounds for k in ks
-            a = ntuple(r -> At[k, i + r - 1], Val(MI))
-            b = ntuple(c -> Bp[k, j + c - 1], Val(MJ))
-            acc = clacc_tile_add(acc, a, b)
-        end
-        @inbounds for c in 1:MJ, r in 1:MI
-            Cp[i + r - 1, j + c - 1] ⊻= clacc_reduce(acc[c][r], zero(T))
-        end
-        return nothing
     end
 end
 
@@ -485,6 +369,40 @@ end
     @inline clmul64_unchecked(a::UInt64, b::UInt64) = clmul64_hw(a, b)
 else
     @inline clmul64_unchecked(a::UInt64, b::UInt64) = clmul64_sw(a, b)
+end
+
+@stable default_mode = "error" begin
+    # Σ_k a_k b_k in F_2[x]/(f): the unreduced products are summed (XOR), then reduced once.
+    @inline function poly_dot(a::AbstractVector{T}, b::AbstractVector{T}) where {T <: Union{UInt16, UInt32}}
+        acc = zero(UInt64)                     # products have degree < 2n - 1 ≤ 63
+        @inbounds for k in eachindex(a, b)
+            acc ⊻= clmul64_unchecked(a[k] % UInt64, b[k] % UInt64) % UInt64
+        end
+        n = 8 * sizeof(T)
+        return poly_reduce((acc >> n) % T, acc % T)
+    end
+    @inline function poly_dot(a::AbstractVector{UInt64}, b::AbstractVector{UInt64})
+        acc = zero(UInt128)
+        @inbounds for k in eachindex(a, b)
+            acc ⊻= clmul64_unchecked(a[k], b[k])
+        end
+        return poly_reduce((acc >> 64) % UInt64, acc % UInt64)
+    end
+    # 128 bits: Karatsuba on 64-bit halves is linear in each product, so its three partial
+    # products are summed separately and combined once.
+    @inline function poly_dot(a::AbstractVector{UInt128}, b::AbstractVector{UInt128})
+        l = h = m = zero(UInt128)
+        @inbounds for k in eachindex(a, b)
+            x, y = a[k], b[k]
+            x1, x0 = (x >> 64) % UInt64, x % UInt64
+            y1, y0 = (y >> 64) % UInt64, y % UInt64
+            l ⊻= clmul64_unchecked(x0, y0)
+            h ⊻= clmul64_unchecked(x1, y1)
+            m ⊻= clmul64_unchecked(x0 ⊻ x1, y0 ⊻ y1)
+        end
+        m ⊻= l ⊻ h
+        return poly_reduce(h ⊻ (m >> 64), l ⊻ (m << 64))
+    end
 end
 
 # `*` and `mul!` for strided matrices and vectors over a nimber field: C = A B α + C β, with α, β

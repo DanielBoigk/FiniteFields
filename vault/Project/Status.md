@@ -15,47 +15,49 @@ kinda want all three"), J8d (2026-11-20: "go with your J8d proposal, fix the GF(
 slowdown first"), J8e (2026-11-20: "Switch to the tables"), J2b, the default for `inv`
 (2026-11-20: "Please implement the next item!", taken as approval of item 1 of the then "Next"
 list), and **J8b** (2026-11-20: "Please implement the next item!" again, taken the same way:
-J8b was item 1). J8b is a whole section; its first sub-item, packing, is done, the rest is open
-(below). Ask before starting a backlog section the maintainer has not approved.
+J8b was item 1). J8b is a whole section: packing is done, cache blocking measured and not
+adopted (below, the third "Please implement the next item!" of 2026-11-20), the rest is open.
+Ask before starting a backlog section the maintainer has not approved.
 
 ## Done last
 
-- **J8b, first part — `BitslicedVector` packing by bit-matrix transposes** (`src/bulk.jl`,
-  "Packing by bit-matrix transposes"): `pack!`/`unpack!` treat 64 elements as a $64 \times n$
-  bit matrix and transpose it with delta swaps; the stages $j \ge n$ reduce to a gather, so only
-  $\log_2 n$ stages run, on $n$ words held in a tuple (registers). New `transpose64!` (internal).
-  Tests first (`test/bulk.jl`: transpose against a bit-by-bit oracle, packing from views and
-  reversed ranges, allocation bounds). `bench/pack.jl`, ns per element, before → after:
-  pack GF(16) 0.94 → 0.18, GF(256) 1.88 → 0.28, GF(2^16) 2.67 → 0.48, GF(2^32) 5.36 → 1.39;
-  unpack 0.50 → 0.13, 1.00 → 0.17, 1.85 → 0.26, 3.65 → 0.83; GF(2) unchanged (~0.1).
-  Details and the two slower versions tried in `src/bulk.md`.
-- **Verified:** `Pkg.test()` passes, 732,624 checks, Julia 1.13.1, x86_64-linux, Aqua and JET
-  included. `bench/pack.jl`, three runs per field, before and after, same session.
-- **Not verified:** Julia 1.10; ARM; CI (not pushed to `full-ci`); the full benchmark suite was
-  not rerun (its `bulk` groups contain pack/unpack and would show the same change); the
-  end-to-end break-even of converting to bitsliced form (inferred from two tables, not measured);
-  GF(2^32) packing not profiled (32-word block vs 16 registers is a guess).
+- **J8b, cache blocking of the matrix products — measured, not adopted.** First
+  `bench/matmul_sizes.jl` (new): the default product from 64 to 2048 does not slow down on this
+  VM (GF(2^16) 0.45 → 0.36, GF(2^64) 0.73 → 0.78, GF(2^128) 3.7 → 3.9 ns per multiply-add); its
+  260 MiB L3 holds even 64 MiB matrices. Then a blocked `CLMulMatMul` with register tiles
+  (1×1 … 4×2): the best tile (2×1) only tied the plain loop at GF(2^16) … GF(2^64) and was
+  slower at GF(2^128). The machine code shows the loop is bound by `PCLMULQDQ` throughput
+  (about one per term) and the tile's shuffles compete for the same port. So the blocked code
+  was **reverted** (it is in git: `79a7ab8`, `20b8cba`); kept are the benchmark, a larger-size
+  test (300 × 1100 × 70) and the write-up in `src/bulk.md`, "Larger sizes and cache blocking",
+  with three Julia pitfalls met on the way (boxed closure variable, `::Type{T}` unspecialised
+  under `@stable`, `@inbounds` not reaching closures).
+- **Proposed instead (J8f, not approved):** attack the `PCLMULQDQ` bound: two terms per 64-bit
+  product at GF(2^16), `VPCLMULQDQ` (present on this CPU) at every level.
+- **Verified:** `Pkg.test()` passes, 732,632 checks, Julia 1.13.1, x86_64-linux, Aqua and JET included. `bench/matmul_sizes.jl` once (the table in `src/bulk.md`); the tile
+  comparison one run per tile (noisy, ±10–40%).
+- **Not verified:** a CPU with a small L3 (where blocking is expected to matter, not measured);
+  Julia 1.10; ARM; CI (not pushed to `full-ci`); the two-terms trick is checked on paper only.
 
-Earlier: J2b (the default for `inv`; the GF(2^32) choice of throughput over latency was
-confirmed by the maintainer on 2026-11-20, "I'd say do it that way"; how to change it later is in
-`src/nimber_fast.md`, "Default for inv"), J8e and J8d, J8c, J8, J2a, nimber
-GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to MathStruct. Details in git and the
-Backlog's *Done*.
+Earlier: J8b packing by bit-matrix transposes (`src/bulk.md`), J2b (the default for `inv`; the
+GF(2^32) choice of throughput over latency was confirmed by the maintainer on 2026-11-20), J8e
+and J8d, J8c, J8, J2a, nimber GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to
+MathStruct. Details in git and the Backlog's *Done*.
 
 ## Next
 
 Within the approved J8b (remaining sub-items, in a proposed order):
 
-1. **Cache blocking of the matrix products** (`CLMulMatMul` converts whole matrices; sizes beyond
-   the caches are unmeasured): first benchmark large sizes, then block.
-2. **Bitsliced matrix product** and bitsliced vectors above GF(2^32) (a GF(2^64) prototype was
+1. **Bitsliced matrix product** and bitsliced vectors above GF(2^32) (a GF(2^64) prototype was
    slow: tuples of 64 vectors spill).
-3. Why inlining both branches of `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
-4. ARM `PMULL` and GPU kernels: need an ARM machine and a GPU; not doable in this container.
+2. Why inlining both branches of `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
+3. ARM `PMULL` and GPU kernels: need an ARM machine and a GPU; not doable in this container.
 
-Not approved (need the maintainer's go): **FF-P1** (`Problems.md`, `CLMul` at GF(2^64) element by
-element); **J1a/J1b** (Conway representation, arbitrary $n$); **J3** (Itoh–Tsujii, extended
-Euclid as `inv` strategies); linear algebra on the matrix products (V5).
+Not approved (need the maintainer's go): **J8f** (fewer carry-less products in `CLMulMatMul`;
+on the measurements above it is the likelier speed-up for matrix products than item 1);
+**FF-P1** (`Problems.md`, `CLMul` at GF(2^64) element by element); **J1a/J1b** (Conway
+representation, arbitrary $n$); **J3** (Itoh–Tsujii, extended Euclid as `inv` strategies);
+linear algebra on the matrix products (V5).
 
 ## Decisions in force (maintainer, 2026-11-19)
 

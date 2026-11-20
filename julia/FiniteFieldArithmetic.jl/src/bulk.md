@@ -15,7 +15,7 @@
 > code: `src/bulk.jl`; the strategies it builds on in `src/nimber.jl`, `src/nimber_fast.jl`.
 > tests: `test/bulk.jl`, `test/constmul.jl`, `test/jet.jl`.
 > benchmarks: `bench/benchmarks.jl` (groups `bulk <field>`, `matmul <field>`), `bench/run.jl`,
-> `bench/rand_compare.jl`, `bench/constmul.jl`, `bench/pack.jl`.
+> `bench/rand_compare.jl`, `bench/constmul.jl`, `bench/pack.jl`, `bench/matmul_sizes.jl`.
 
 ## Broadcasting
 
@@ -191,6 +191,59 @@ Strategies (`MatMulStrategy`):
 
 Defaults (from the measurements below): `TableMatMul` up to GF(256), `CLMulMatMul` from GF(2^16).
 
+### Larger sizes and cache blocking (J8b)
+
+Measured first, then blocked; the blocking did not pay on this machine and was not kept.
+
+`bench/matmul_sizes.jl`, 2026-11-20, same VM as below (Emerald Rapids, L1d 48 KiB and L2 2 MiB
+per core, **L3 260 MiB**), default strategy, $n \times n$ times $n \times n$, minimum of 3–20
+runs, ns per multiply-add:
+
+| field | 64 | 128 | 256 | 512 | 1024 | 2048 |
+|---|---|---|---|---|---|---|
+| GF(256) (`TableMatMul`) | 1.29 | 1.32 | 0.79 | 0.80 | 0.81 | 0.86 |
+| GF(2^16) | 0.45 | 0.40 | 0.39 | 0.38 | 0.38 | 0.36 |
+| GF(2^32) | 0.46 | 0.41 | 0.35 | 0.35 | 0.37 | 0.40 |
+| GF(2^64) | 0.73 | 0.76 | 0.66 | 0.72 | 0.77 | 0.78 |
+| GF(2^128) | 3.72 | 3.14 | 3.33 | 3.39 | 3.37 | 3.85 |
+
+No cliff: at 2048 the converted matrices take 8 MiB (GF(2^16)) to 64 MiB (GF(2^128)) each, beyond
+L2 but inside this VM's L3, and the product streams them from there at the speed it computes.
+The loop is bound by `PCLMULQDQ` throughput instead: at GF(2^16) 0.36–0.38 ns per term is about
+one carry-less product per cycle (the instruction's throughput on recent Intel cores; clock not
+measured), at GF(2^128) three products plus the Karatsuba XORs.
+
+**Blocked version tried** (commits `79a7ab8`, `20b8cba` on `dev-danielb`, reverted): blocks of
+$k$, $i$, $j$ with one reduction per block into a polynomial-basis accumulator, and an
+$M_I \times M_J$ register tile in the micro-kernel, so that each loaded factor enters $M_J$
+(resp. $M_I$) products. At 512, minimum of 3 runs (scratch script, a single run each, so ±10–40%):
+
+| tile | GF(2^16) | GF(2^32) | GF(2^64) | GF(2^128) |
+|---|---|---|---|---|
+| unblocked (above) | 0.38 | 0.35 | 0.72 | 3.39 |
+| 1 × 1 | 0.54 | 0.52 | 0.88 | 3.54 |
+| 2 × 1 | 0.35 | 0.35 | 0.74 | 9.33 |
+| 1 × 2 | 0.60 | 0.62 | 0.74 | 4.12 |
+| 2 × 2 | 0.54 | 0.58 | 0.93 | 6.04 |
+| 4 × 2 | 0.53 | 0.54 | 1.05 | 4.93 |
+
+The best tile only ties the unblocked loop. The machine code of the 2 × 2 tile (`code_native`,
+GF(2^16)) shows why more reuse does not help: the inner loop issues one `vpclmulqdq` per term
+already, and the tile adds shuffles (`vpermt2q`, `vinserti128`) to pack the accumulators, which on
+Intel compete for the same execution port as `PCLMULQDQ`. So `CLMulMatMul` stays unblocked.
+
+Expectations, not measured: on a CPU with a small L3 (a few MiB) the unblocked loop should slow
+down once a converted matrix leaves the cache (from about 512 at GF(2^128), 1500 at GF(2^16)), and
+the blocked version in git would then be the starting point. What should pay here instead attacks
+the `PCLMULQDQ` bound:
+
+- **Two terms per product at GF(2^16):** with $a = a_1 + a_2 x^{32}$ and $b = b_2 + b_1 x^{32}$,
+  $ab = a_1 b_2 + (a_1 b_1 + a_2 b_2)\,x^{32} + a_2 b_1 x^{64}$; each $a_i b_j$ has degree
+  $\le 30$, so bits 32–62 of one 64-bit carry-less product hold the two-term sum, untouched by the
+  other two. Halves the products at GF(2^16) (checked on paper only).
+- **`VPCLMULQDQ`** (AVX-512, present on this CPU): four 64-bit carry-less products per
+  instruction on a 512-bit vector.
+
 ## Bitsliced vectors
 
 `BitslicedVector{N}` stores $n$-bit elements as $n$ *planes*: plane $j$ holds bit $j$ of every
@@ -305,8 +358,9 @@ products of two arrays are in `nimber.md` and `nimber_fast.md` (GF(256) `MulTabl
 - `c .* a` uses tables only from the threshold on (96 elements at GF(256) and below, 192–768
   above). A broadcast whose result is shorter than the threshold pays a few ns per call for the
   decision.
-- No cache blocking in the matrix products: matrices are converted whole, and each entry streams
-  a column of each. Sizes beyond the caches are not measured.
+- No cache blocking in the matrix products (J8b: measured up to 2048, no slowdown on this VM's
+  260 MiB L3, and a blocked version did not beat the plain loop; see "Larger sizes and cache
+  blocking"). CPUs with small caches are not measured.
 - Packing reads the source element by element (a gather with stride $n$); reading whole words of
   the source's memory and transposing those was not tried. GF(2^32) packing (1.4 ns) is the
   slowest: its 32-word block does not fit in the 16 general-purpose registers (not profiled).
@@ -316,6 +370,13 @@ products of two arrays are in `nimber.md` and `nimber_fast.md` (GF(256) `MulTabl
 - Not constant time (J6, not a goal).
 
 ## Difficulties met
+
+- The blocked `CLMulMatMul` (J8b, reverted) first ran 1000 times slower and allocated per entry:
+  (1) its `ntuple` closure captured the reassigned accumulator, which Julia boxes; (2) a helper
+  taking `::Type{T}` inside DispatchDoctor's `@stable` block was not specialised on `T`, so
+  `poly_reduce`'s loop over `poly_modulus(T)` computed type parameters at run time
+  (`Profile.Allocs` showed `jl_f__compute_sparams`); passing a value of type `T` fixed it; and
+  (3) `@inbounds` around a loop does not reach into the `ntuple` closures in it.
 
 - The tuple recursion of the bitsliced circuit was first one generic method over `NTuple{M, W}`.
   It ran correctly but Aqua flagged the unbound parameters (for $M = 0$) and JET could not follow

@@ -35,7 +35,7 @@ using JET, Test
         A, B, C = fill(x, 3, 3), fill(x, 3, 3), fill(x, 3, 3)
         m = MulBy(x)
         @test_opt m(x)
-        for s in (ScalarMatMul(MulTable()), TableMatMul(), CLMulMatMul(), CLMulMatMul(2, 1, 2))
+        for s in (ScalarMatMul(MulTable()), TableMatMul(), CLMulMatMul())
             @test_opt matmul!(s, C, A, B)
         end
         @test_opt A * B

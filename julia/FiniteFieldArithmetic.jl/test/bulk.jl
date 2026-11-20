@@ -120,32 +120,9 @@ end
     @test_throws DimensionMismatch matmul!(TableMatMul(), zeros(F, 2, 2), zeros(F, 2, 3), zeros(F, 2, 2))
 end
 
-# Cache blocking (J8b): CLMulMatMul(kc, mc, nc) splits k, i, j into blocks of these sizes. Small
-# blocks that do not divide the sizes exercise every edge; the micro-kernel's tails (rows and
-# columns left over from its tile) show up at the odd sizes.
-@testset "blocked CLMulMatMul, $F" for F in LEVELS
-    @test CLMulMatMul() == CLMulMatMul(0, 0, 0)               # 0: block size chosen per field
-    @test_throws ArgumentError CLMulMatMul(-1, 4, 4)
-    blocks = ((1, 1, 1), (2, 3, 5), (5, 3, 2), (7, 4, 6), (64, 64, 64), (0, 0, 0))
-    for (m, p, q) in ((1, 1, 1), (13, 11, 9), (17, 23, 19), (33, 8, 3), (2, 40, 1), (0, 5, 4))
-        A, B = reshape(samples(F, m * p), m, p), reshape(samples(F, p * q), p, q)
-        R = refmatmul(A, B)
-        x = samples(F, p)
-        r = refmatmul(A, x)
-        for b in blocks
-            s = CLMulMatMul(b...)
-            @test matmul!(s, fill(one(F), m, q), A, B) == R
-            @test matmul!(s, fill(one(F), m), A, x) == r
-        end
-    end
-    # strided views with blocks
-    Av, Bv = view(rand(rng, F, 31, 30), 1:2:31, 2:2:30), view(rand(rng, F, 15, 36), :, 1:3:36)
-    @test matmul!(CLMulMatMul(4, 5, 3), similar(Av, 16, 12), Av, Bv) == refmatmul(Av, Bv)
-end
-
-# Larger than the default blocks of every field (sizes chosen in src/bulk.md): the product of
-# random matrices against ScalarMatMul(MulTable()), which is checked against Recursive above.
-@testset "CLMulMatMul across default blocks, $F" for F in (GF2_16, GF2_32, GF2_64, GF2_128)
+# Larger products (J8b: the size sweep of bench/matmul_sizes.jl goes up to 2048): a long inner
+# dimension, against ScalarMatMul(MulTable()), which is checked against Recursive above.
+@testset "CLMulMatMul, larger sizes, $F" for F in (GF2_16, GF2_32, GF2_64, GF2_128)
     m, p, q = 300, 1100, 70
     A, B = rand(rng, F, m, p), rand(rng, F, p, q)
     R = matmul!(ScalarMatMul(MulTable()), similar(A, m, q), A, B)
