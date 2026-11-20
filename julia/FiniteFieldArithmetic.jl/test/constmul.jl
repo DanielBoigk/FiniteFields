@@ -69,7 +69,7 @@ end
     c = GF2_32(0x53)
     long, short = rand(rng, GF2_32, mulby_threshold(GF2_32)), rand(rng, GF2_32, 3)
     @test Base.Broadcast.broadcasted(*, c, long).f isa MulBy
-    @test Base.Broadcast.broadcasted(*, c, short).f === *
+    @test Base.Broadcast.broadcasted(*, c, short).f === (*)
     @test c .* long == cm_refmul.(Ref(c), long)
 end
 
@@ -101,14 +101,14 @@ end
     m = bc.f
     @test m isa MulBy{F}                                      # 64 ≥ 64: tables
     below = const_mul_broadcasted(LazyMulBy(65), c, a)
-    @test below.f === * && below.args === (c, a)              # Base's own broadcast
+    @test below.f === (*) && below.args === (c, a)              # Base's own broadcast
     @test const_mul_broadcasted(LazyMulBy(65), a, c, (a, c)).args === (a, c)  # order kept
     # The result is one of two Broadcasted types, a small Union that the compiler splits.
     rt = Base.return_types(const_mul_broadcasted, Tuple{LazyMulBy, F, Vector{F}})
     @test length(rt) == 1 && rt[1] == Union{typeof(bc), typeof(below)}
     lazy = Base.Broadcast.broadcasted(+, a, a)                # a lazy argument of length 64
     @test const_mul_broadcasted(LazyMulBy(64), c, lazy).f isa MulBy{F}
-    @test const_mul_broadcasted(LazyMulBy(65), c, lazy).f === *
+    @test const_mul_broadcasted(LazyMulBy(65), c, lazy).f === (*)
     for x in rand(rng, F, 50)
         @test m(x) == cm_refmul(c, x)
     end

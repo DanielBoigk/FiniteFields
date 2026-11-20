@@ -68,9 +68,13 @@ Base.size(::StaticImages{M}) where {M} = (M,)
 Base.@propagate_inbounds Base.getindex(s::StaticImages, i::Int) = s.v[i]
 
 # (Callable structs are outside DispatchDoctor's reach; JET's @test_opt checks this one.)
-@inline (m::MulBy{N, T})(x::N) where {N, T} = unsafe_frombits(N, apply_bytes(m.tab, bits(x)))
+@inline (m::MulBy{Nimber{K, T}, T})(x::Nimber{K, T}) where {K, T <: Unsigned} =
+    unsafe_frombits(Nimber{K, T}, apply_bytes(m.tab, bits(x)))
 
-# --- Constant times array in broadcasts (J8c) -------------------------------------------------
+# --- Constant times array in broadcasts (J8c, J8d) --------------------------------------------
+
+# Operands of another type (elements of a lazy argument in a broadcast) get the scalar product.
+@inline (m::MulBy)(x) = m.c * x
 
 """
     ConstMulStrategy
@@ -79,38 +83,31 @@ How a broadcast of a constant times an array (`c .* a`, `a .* c`, and `c * a`, w
 computes by broadcasting) is computed, chosen per field by [`default_constmul_strategy`](@ref):
 
 - [`ScalarConstMul`](@ref): the scalar `*`, element by element;
-- [`EagerMulBy`](@ref): multiplication-by-constant tables ([`MulBy`](@ref)), materialised at once;
-- [`LazyMulBy`](@ref): the tables inside the fused broadcast, built only for long arrays.
+- [`LazyMulBy`](@ref): the byte tables of [`MulBy`](@ref) inside the fused broadcast, for long
+  arrays.
 
-Measurements and the choice of the default: `src/bulk.md`, "Constant times array".
+Measurements and the choice of the defaults: `src/bulk.md`, "Constant times array".
 """
 abstract type ConstMulStrategy end
 
 """
     ScalarConstMul()
 
-`c .* a` multiplies element by element with the scalar `*`; fused expressions stay fused. The
-behaviour of Base's broadcasting, kept as the baseline.
+`c .* a` multiplies element by element with the scalar `*`; fused expressions stay fused. Base's
+behaviour, and the default up to ``\\mathbb{F}_{256}``.
 """
 struct ScalarConstMul <: ConstMulStrategy end
-
-"""
-    EagerMulBy()
-
-`c .* a` is computed at once through the byte tables of multiplication by `c` (as
-[`MulBy`](@ref)) and returns an array. Breaks fusion: in `c .* a .+ b` the product is a temporary
-array, and `out .= c .* a` allocates and copies. Pays the table set-up on every broadcast.
-"""
-struct EagerMulBy <: ConstMulStrategy end
 
 """
     LazyMulBy(threshold::Int)
     LazyMulBy(F) = LazyMulBy(mulby_threshold(F))
 
-`c .* a` stays a lazy broadcast of a callable that holds `c`, so fused expressions stay fused. For
-an argument of at least `threshold` elements the callable builds the byte tables of
-multiplication by `c` (as [`MulBy`](@ref)) and every product is a table lookup; below, it uses the
-scalar `*` and costs nothing extra. [`mulby_threshold`](@ref) holds the measured break-even.
+For an argument of at least `threshold` elements, `c .* a` becomes the lazy broadcast
+`MulBy(c).(a)`: the byte tables are built once per broadcast, every product is a table lookup,
+and fused expressions stay fused. Below the threshold it is Base's broadcast of `*`
+([`ScalarConstMul`](@ref)), so short arrays cost nothing extra. The result is one of two
+`Broadcasted` types, which the compiler splits. The default from ``\\mathbb{F}_{2^{16}}`` up,
+with the measured break-even [`mulby_threshold`](@ref).
 """
 struct LazyMulBy <: ConstMulStrategy
     threshold::Int
@@ -121,11 +118,14 @@ LazyMulBy(::Type{N}) where {N <: Nimber} = LazyMulBy(mulby_threshold(N))
     default_constmul_strategy(F)
 
 The [`ConstMulStrategy`](@ref) behind `c .* a` and `a .* c` for a constant `c::F` and an array
-(or lazy broadcast) `a`: [`ScalarConstMul`](@ref) for every field, i.e. Base's behaviour. To try
-another one, redefine it for a field, e.g.
-`FiniteFieldArithmetic.default_constmul_strategy(::Type{GF2_64}) = LazyMulBy(GF2_64)`.
+(or lazy broadcast) `a`: [`ScalarConstMul`](@ref) up to ``\\mathbb{F}_{256}``, where tables gain
+nothing in fused expressions, and [`LazyMulBy`](@ref)`(F)` from ``\\mathbb{F}_{2^{16}}`` up
+(`src/bulk.md`). To change it, redefine it for a field, e.g.
+`FiniteFieldArithmetic.default_constmul_strategy(::Type{GF2_64}) = ScalarConstMul()`.
 """
 default_constmul_strategy(::Type{<:Nimber}) = ScalarConstMul()
+default_constmul_strategy(::Type{N}) where {N <: Union{GF2_16, GF2_32, GF2_64, GF2_128}} =
+    LazyMulBy(N)
 
 """
     mulby_threshold(F)
@@ -142,53 +142,31 @@ mulby_threshold(::Type{GF2_32}) = 192
 mulby_threshold(::Type{GF2_64}) = 256
 mulby_threshold(::Type{GF2_128}) = 512
 
-# The callable of LazyMulBy and EagerMulBy: `c`, and the byte tables of x ↦ c ⊗ x (as in MulBy)
-# when `tables` is set. Up to GF(256) this is a copy of a column of NIM256_MUL: indexing
-# NIM256_MUL itself measured 0.36 ns per element against 0.20 for the copy (src/bulk.md). Without
-# tables, `tab` is a shared empty matrix, so the type does not depend on the length and nothing
-# is allocated. Operands of another type (in a lazy argument) get the scalar `*`.
-struct ConstMul{N <: Nimber, T <: Unsigned} <: Function
-    c::N
-    tab::Matrix{T}
-    tables::Bool
-end
-
-for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
-    name = Symbol(:EMPTY_TABLE_, T)
-    @eval const $name = Matrix{$T}(undef, 0, 0)
-    @eval empty_table(::Type{$T}) = $name
-end
-
-function ConstMul(c::N, tables::Bool) where {K, T, N <: Nimber{K, T}}
-    tab = tables ? mulby_tables!(Matrix{T}(undef, 256, sizeof(T)), c) : empty_table(T)
-    return ConstMul{N, T}(c, tab, tables)
-end
-
-@inline (m::ConstMul{Nimber{K, T}, T})(x::Nimber{K, T}) where {K, T <: Unsigned} =
-    m.tables ? unsafe_frombits(Nimber{K, T}, apply_bytes(m.tab, bits(x))) : m.c * x
-@inline (m::ConstMul)(x) = m.c * x
-
 const ArrayOrLazy = Union{AbstractArray, Broadcast.Broadcasted}
 
 """
     const_mul_broadcasted(strategy::ConstMulStrategy, c, a)
 
 What `Broadcast.broadcasted(*, c, a)` returns for a constant `c::Nimber` and an array or lazy
-broadcast `a` under `strategy` (a lazy `Broadcasted`, or an array for [`EagerMulBy`](@ref)).
+broadcast `a` under `strategy`: a lazy `Broadcasted`.
 """
 const_mul_broadcasted(s::ConstMulStrategy, c::Nimber, a::ArrayOrLazy) =
     const_mul_broadcasted(s, c, a, (c, a))
+const_mul_broadcasted(s::ConstMulStrategy, a::ArrayOrLazy, c::Nimber, args::Tuple) =
+    const_mul_broadcasted(s, c, a, args)
 
-# `args` is the argument tuple as written (c, a) or (a, c); ScalarConstMul keeps its order.
+# `args` is the argument tuple as written, (c, a) or (a, c); Base's broadcast keeps its order.
 const_mul_broadcasted(::ScalarConstMul, ::Nimber, ::ArrayOrLazy, args::Tuple) =
     Broadcast.broadcasted(Broadcast.combine_styles(args...), *, args...)
-const_mul_broadcasted(::EagerMulBy, c::Nimber, a::ArrayOrLazy, ::Tuple) =
-    Broadcast.materialize(Broadcast.broadcasted(ConstMul(c, true), a))
-const_mul_broadcasted(s::LazyMulBy, c::Nimber, a::ArrayOrLazy, ::Tuple) =
-    Broadcast.broadcasted(ConstMul(c, length(a) >= s.threshold), a)
+# Two return types on purpose: Base's broadcast below the threshold (a per-element branch on a
+# flag instead cost 19–27% at GF(2^16) in fused loops, J8c), tables above.
+function const_mul_broadcasted(s::LazyMulBy, c::Nimber, a::ArrayOrLazy, args::Tuple)
+    length(a) < s.threshold && return const_mul_broadcasted(ScalarConstMul(), c, a, args)
+    return Broadcast.broadcasted(MulBy(c), a)
+end
 
 # The hooks. Only arrays whose element type is that of the constant, and lazy arguments (whose
-# element type is not known here; ConstMul falls back to `*` for other operands).
+# element type is not known here; MulBy falls back to `*` for other operands).
 Broadcast.broadcasted(::typeof(*), c::N, a::AbstractArray{N}) where {N <: Nimber} =
     const_mul_broadcasted(default_constmul_strategy(N), c, a, (c, a))
 Broadcast.broadcasted(::typeof(*), a::AbstractArray{N}, c::N) where {N <: Nimber} =
