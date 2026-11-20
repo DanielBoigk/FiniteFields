@@ -12,7 +12,8 @@
 using FiniteFieldArithmetic
 using FiniteFieldArithmetic: bits, mul, Recursive, MulTable, LogTable16, CLMul, has_pclmul,
     MatMulStrategy, ScalarMatMul, TableMatMul, CLMulMatMul, BitslicedMatMul, BySizeMatMul,
-    choose_matmul, bitsliced_threshold, matmul!, default_matmul_strategy, mul_elementwise!
+    choose_matmul, bitsliced_threshold, matmul!, default_matmul_strategy, mul_elementwise!,
+    clmul_column_max
 using LinearAlgebra, Random, Test
 
 rng = Xoshiro(20261121)
@@ -130,6 +131,42 @@ end
     R = matmul!(ScalarMatMul(MulTable()), similar(A, m, q), A, B)
     @test matmul!(CLMulMatMul(), similar(A, m, q), A, B) == R
     @test A * B == R
+end
+
+# FF-P2: up to `clmul_column_max(F)` columns of B (matrix × vector in particular), CLMulMatMul works
+# column by column without transposing A. Oracle: ScalarMatMul(MulTable()), checked above.
+@testset "CLMulMatMul, few columns (FF-P2), $F" for F in (GF2_16, GF2_32, GF2_64, GF2_128)
+    qmax = clmul_column_max(F)
+    @test qmax isa Int && qmax >= 1
+    ref(A, B) = matmul!(ScalarMatMul(MulTable()), similar(A, size(A, 1), size(B, 2)), A, B)
+    for (m, p) in ((300, 1100), (1, 50), (50, 1), (65, 3), (0, 4), (4, 0))
+        A = rand(rng, F, m, p)
+        x = rand(rng, F, p)
+        p >= 3 && (x[1] = zero(F); x[end] = zero(F); x[2] = one(F))   # zero and unit entries
+        R = vec(ref(A, reshape(x, p, 1)))
+        c = fill(one(F), m)                                         # overwritten
+        @test matmul!(CLMulMatMul(), c, A, x) === c
+        @test c == R
+        @test A * x == R
+        for q in unique((2, qmax, qmax + 1))                         # both sides of the rule
+            B = rand(rng, F, p, q)
+            @test matmul!(CLMulMatMul(), similar(A, m, q), A, B) == ref(A, B)
+        end
+    end
+    # strided, non-contiguous A, x and c
+    Ap = rand(rng, F, 41, 60)
+    A, x = view(Ap, 2:2:40, 1:3:60), view(rand(rng, F, 45), 1:2:40)
+    cp = rand(rng, F, 50)
+    cp0 = copy(cp)
+    c = view(cp, 1:2:40)
+    R = vec(ref(collect(A), reshape(collect(x), :, 1)))
+    @test matmul!(CLMulMatMul(), c, A, x) == R
+    @test cp[2:2:50] == cp0[2:2:50] && cp[41:end] == cp0[41:end]     # the rest untouched
+    @test A * x == R
+    # no transpose of A: only the accumulators (at most 48 bytes per row) are allocated
+    A, x, c = rand(rng, F, 512, 512), rand(rng, F, 512), Vector{F}(undef, 512)
+    matmul!(CLMulMatMul(), c, A, x)
+    @test (@allocated matmul!(CLMulMatMul(), c, A, x)) <= 48 * 512 + 512
 end
 
 @testset "CLMulMatMul without PCLMULQDQ" begin

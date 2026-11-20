@@ -41,6 +41,9 @@ using JET, Test
             @test_opt matmul!(s, C, A, B)
         end
         @test_opt A * B
+        v, w = fill(x, 3), fill(x, 3)
+        @test_opt matmul!(CLMulMatMul(), w, A, v)                # matrix × vector (FF-P2)
+        @test_opt A * v
         # constant times array (J8c)
         a = fill(x, 70)
         for s in (ScalarConstMul(), LazyMulBy(0), LazyMulBy(typemax(Int)))
