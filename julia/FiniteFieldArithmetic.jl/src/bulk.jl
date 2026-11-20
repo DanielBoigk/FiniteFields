@@ -280,9 +280,9 @@ struct TableMatMul <: MatMulStrategy end
 The product in the polynomial basis of [`CLMul`](@ref) (``\\mathbb{F}_{2^n}``, ``n \\ge 16``): both
 matrices are converted once, every entry of the result is a sum of carry-less products, which is
 reduced modulo ``f`` and converted back once (reduction is linear, so it commutes with the sum).
-Up to [`clmul_column_max`](@ref) columns of `B` (a matrix times a vector in particular) `A` is
-not converted as a whole: it is read column by column in storage order and each entry converted
-on the fly, with the unreduced sums kept per row of the result (FF-P2, `src/bulk.md`).
+For a vector or two columns and a large `A` ([`clmul_by_columns`](@ref)) `A` is not converted
+as a whole: it is read column by column in storage order and each entry converted on the fly,
+with the unreduced sums kept per row of the result (FF-P2, `src/bulk.md`).
 Needs `PCLMULQDQ` ([`has_pclmul`](@ref)); without it it computes as
 `ScalarMatMul(MulTable())`, and up to ``\\mathbb{F}_{256}`` as [`TableMatMul`](@ref).
 """
@@ -346,7 +346,8 @@ end
                          B::StridedVecOrMat{N}) where {K, T, N <: Nimber{K, T}}
         K <= 3 && return matmul_add!(TableMatMul(), C, A, B)
         has_pclmul() || return matmul_add!(ScalarMatMul(MulTable()), C, A, B)
-        size(B, 2) <= clmul_column_max(N) && return clmul_columns_add!(C, A, B)
+        clmul_by_columns(N, size(A, 1), size(A, 2), size(B, 2)) &&
+            return clmul_columns_add!(C, A, B)
         return clmul_transposed_add!(C, A, B)
     end
 
@@ -374,7 +375,7 @@ end
     # C += A B in the polynomial basis column by column (FF-P2): A is read in storage order and
     # each entry converted when it is used, the unreduced sums of products are kept per row and
     # reduced once per entry of C. Converts A once per column of B, so it pays for few columns
-    # only (`clmul_column_max`). The caller has checked `has_pclmul()` and K ≥ 4.
+    # and a large A only (`clmul_by_columns`). The caller has checked `has_pclmul()` and K ≥ 4.
     function clmul_columns_add!(C::StridedVecOrMat{N}, A::StridedMatrix{N},
                                 B::StridedVecOrMat{N}) where {K, T, N <: Nimber{K, T}}
         acc = Vector{poly_acc_type(T)}(undef, size(A, 1))
@@ -396,21 +397,29 @@ end
 end
 
 """
-    clmul_column_max(F)
+    clmul_by_columns(F, m, p, q)
 
-The largest number of columns of `B` for which [`CLMulMatMul`](@ref) computes `A * B` column by
-column (converting each entry of `A` when it is used) rather than converting and transposing `A`
-once. 1 (matrix × vector only) until `bench/matvec.jl` has measured where the column-wise path
-stops paying.
+Whether [`CLMulMatMul`](@ref) computes the product of an `m × p` matrix `A` and a `p × q` matrix
+(or vector, `q = 1`) column by column, converting each entry of `A` when it is used, rather than
+converting and transposing `A` once. The column path saves the transpose, whose strided reads
+cost most when `A` is large; it converts `A` once per column, so it pays for one or two columns
+only. From `bench/matvec.jl sizes` (FF-P2, `src/bulk.md`, "Matrix × vector"): a vector when `A`
+has at least 512 KiB; two columns when `A` has at least 4 MiB and `m, p ≥ 256`.
 """
-clmul_column_max(::Type{<:Nimber}) = 1
+function clmul_by_columns(::Type{F}, m::Integer, p::Integer, q::Integer) where {F <: Nimber}
+    bytes = widemul(m, p) * sizeof(F)
+    q == 1 && return bytes >= 512 * 1024
+    q == 2 && return bytes >= 4 * 1024^2 && min(m, p) >= 256
+    return false
+end
 
 # Unreduced sums of carry-less products, for clmul_columns_add!: the accumulator type of an
 # n-bit field, its zero, a multiply-accumulate, and the reduction to n bits.
 poly_acc_type(::Type{<:Union{UInt16, UInt32}}) = UInt64     # products of degree < 2n - 1 ≤ 63
 poly_acc_type(::Type{UInt64}) = UInt128
 poly_acc_type(::Type{UInt128}) = NTuple{3, UInt128}         # Karatsuba's three partial products
-poly_acc_zero(::Type{T}) where {T} = zero(poly_acc_type(T))
+poly_acc_zero(::Type{<:Union{UInt16, UInt32}}) = zero(UInt64)
+poly_acc_zero(::Type{UInt64}) = zero(UInt128)
 poly_acc_zero(::Type{UInt128}) = (zero(UInt128), zero(UInt128), zero(UInt128))
 
 @stable default_mode = "error" begin
@@ -423,18 +432,20 @@ poly_acc_zero(::Type{UInt128}) = (zero(UInt128), zero(UInt128), zero(UInt128))
         return (acc[1] ⊻ clmul64_unchecked(a0, b0), acc[2] ⊻ clmul64_unchecked(a1, b1),
                 acc[3] ⊻ clmul64_unchecked(a0 ⊻ a1, b0 ⊻ b1))
     end
+end
 
-    @inline function poly_acc_reduce(acc::UInt64, ::Type{T}) where {T <: Union{UInt16, UInt32}}
-        n = 8 * sizeof(T)
-        return poly_reduce((acc >> n) % T, acc % T)
-    end
-    @inline poly_acc_reduce(acc::UInt128, ::Type{UInt64}) =
-        poly_reduce((acc >> 64) % UInt64, acc % UInt64)
-    @inline function poly_acc_reduce(acc::NTuple{3, UInt128}, ::Type{UInt128})
-        l, h, m = acc
-        m ⊻= l ⊻ h
-        return poly_reduce(h ⊻ (m >> 64), l ⊻ (m << 64))
-    end
+# The reduction of an accumulator to n bits. Outside `@stable` and one method per type: under
+# `@stable` an argument `::Type{T}` with a free `T` was dispatched at runtime on every call (938 kB
+# per 512 × 512 matrix × vector), and JET's package pass reads a free `T` as a union. JET checks
+# these through `clmul_columns_add!`.
+@inline poly_acc_reduce(acc::UInt64, ::Type{UInt16}) = poly_reduce((acc >> 16) % UInt16, acc % UInt16)
+@inline poly_acc_reduce(acc::UInt64, ::Type{UInt32}) = poly_reduce((acc >> 32) % UInt32, acc % UInt32)
+@inline poly_acc_reduce(acc::UInt128, ::Type{UInt64}) =
+    poly_reduce((acc >> 64) % UInt64, acc % UInt64)
+@inline function poly_acc_reduce(acc::NTuple{3, UInt128}, ::Type{UInt128})
+    l, h, m = acc
+    m ⊻= l ⊻ h
+    return poly_reduce(h ⊻ (m >> 64), l ⊻ (m << 64))
 end
 
 # The carry-less product of the hardware when the caller has checked `has_pclmul()`; the branch

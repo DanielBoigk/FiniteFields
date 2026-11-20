@@ -21,7 +21,7 @@ Do not use this log as a substitute for feature planning; planned work belongs i
 - **Consequence:** GF(2^64) keeps `MulTable` as default. Investigate on a quiet machine
   (`code_llvm` of the whole broadcast loop, `perf`), then reconsider the default.
 
-## FF-P2 — `CLMulMatMul` is slow for matrix × vector (open, 2026-11-20)
+## FF-P2 — `CLMulMatMul` is slow for matrix × vector (resolved, 2026-11-20)
 
 - **Where:** `julia/FiniteFieldArithmetic.jl/src/bulk.jl`, `matmul_add!(::CLMulMatMul, …)`, the
   default for `A * x` above GF(256) (below the bitsliced threshold, which a vector never reaches).
@@ -34,3 +34,9 @@ Do not use this log as a substitute for feature planning; planned work belongs i
   not profiled.)
 - **Consequence:** none for correctness. Options: a matrix × vector path without converting $A$
   (scalar `CLMul` products, or `MulBy`-style tables of the vector entries), chosen by $q$.
+- **Resolution (2026-11-20):** a column-wise path without the transpose (`clmul_columns_add!`),
+  chosen by `clmul_by_columns(F, m, p, q)`: a vector with $A \ge$ 512 KiB, two columns with
+  $A \ge$ 4 MiB and $m, p \ge 256$. The measurement showed the crossover depends on the size of
+  $A$, not only on $q$: for small $A$ the transposed path is as fast or faster even for a vector.
+  $1024 \times 1024$ times a vector now 1.05 / 2.94 / 14.9 ns per multiply-add at GF(2^32) /
+  GF(2^64) / GF(2^128). Details and `bench/matvec.jl` in `src/bulk.md`, "Matrix × vector".

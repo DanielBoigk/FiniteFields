@@ -5,14 +5,16 @@
 # - `transposed`: A converted to the polynomial basis and transposed once, then one `poly_dot` per
 #   entry of the result (the path for many columns);
 # - `columns`: column by column, A read in storage order and converted on the fly, unreduced
-#   products accumulated per row (the path up to `clmul_column_max(F)` columns);
+#   products accumulated per row (the path `clmul_by_columns(F, m, p, q)` picks);
 #
 # and, for comparison, `TableMatMul` and `ScalarMatMul(CLMul())`. The last lines per field print
-# the largest q of the grid up to which `columns` was faster at every q and size: the measured
-# basis of `clmul_column_max`.
+# the largest q of the grid up to which `columns` was faster at every q and size. The crossover
+# depends on the size of A (the transpose is what the column path saves), so `sizes` sweeps it:
+# that sweep is the basis of `clmul_by_columns`.
 #
 # julia --project=bench bench/matvec.jl            (about 20 minutes)
 # julia --project=bench bench/matvec.jl GF2_64     (one field)
+# julia --project=bench bench/matvec.jl sizes      (the size sweep below, about 20 minutes)
 using FiniteFieldArithmetic, BenchmarkTools, Random
 using FiniteFieldArithmetic: matmul!, TableMatMul, ScalarMatMul, CLMul, clmul_transposed_add!,
     clmul_columns_add!
@@ -58,5 +60,23 @@ function sweep(F)
     return best
 end
 
-fields = isempty(ARGS) ? ALL : Tuple(getfield(FiniteFieldArithmetic, Symbol(a)) for a in ARGS)
-foreach(sweep, fields)
+# The size of A at which `columns` starts to pay, at a few q: the two paths per shape, and the
+# bytes of A (the transposed path's cost is the transpose of A, cheap while A fits in cache).
+const SIZE_SHAPES = ((128, 128), (256, 256), (384, 384), (512, 512), (724, 724), (1024, 1024),
+                     (1448, 1448), (2048, 2048), (16, 16384), (16384, 16), (256, 4096), (4096, 256))
+
+function size_sweep(F)
+    for (m, p) in SIZE_SHAPES, q in (1, 2, 4, 8)
+        tt = ns(clmul_transposed_add!, F, m, p, q)
+        tc = ns(clmul_columns_add!, F, m, p, q)
+        kib = m * p * sizeof(F) ÷ 1024
+        println(rpad(string(F), 8), lpad("$m × $p × $q", 18), lpad("A $kib KiB", 13),
+                "  transposed", r(tt), "  columns", r(tc), "  ratio ", lpad(round(tt / tc; digits = 2), 5))
+        flush(stdout)
+    end
+end
+
+sizes = !isempty(ARGS) && ARGS[1] == "sizes"
+names = sizes ? ARGS[2:end] : ARGS
+fields = isempty(names) ? ALL : Tuple(getfield(FiniteFieldArithmetic, Symbol(a)) for a in names)
+foreach(sizes ? size_sweep : sweep, fields)

@@ -133,6 +133,11 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   and `/`; `LogTable16` at GF(2^16) (2.7× throughput, less latency) and GF(2^32) (1.4–1.9×
   throughput, 20–50% more latency: chosen for throughput, confirmed by the maintainer 2026-11-20), as `*`
   elsewhere. `inv latency` benchmarks added. Details in `src/nimber_fast.md`, "Default for inv".
+- **FF-P2 — `CLMulMatMul` for matrix × vector** (approved and done 2026-11-20): a column-wise
+  path reading $A$ in storage order without transposing it, for a vector when $A \ge$ 512 KiB
+  and two columns when $A \ge$ 4 MiB with $m, p \ge 256$ (`clmul_by_columns`, from
+  `bench/matvec.jl sizes`). $1024 \times 1024$ times a vector 4.7–8.6× faster (GF(2^128): 70 →
+  14.9 ns per multiply-add). Details in `src/bulk.md`, "Matrix × vector".
 - **J8b — Why inlining both `LazyMulBy` branches slowed the loop** (2026-11-20): LLVM's loop
   unswitching cost multiplier grows with the loops in a method, so with both loops inlined the
   scalar loop kept a per-element broadcast index `select` (8–10% at GF(2^16)); confirmed with

@@ -221,6 +221,60 @@ Defaults (from the measurements below): `TableMatMul` up to GF(256), `CLMulMatMu
 for products below the field's `bitsliced_threshold`; from it on (every dimension at least 48 at
 GF(2) … 512 at GF(2^64)) `BitslicedMatMul`, through `BySizeMatMul` (J8g, `bitsliced_matmul.md`).
 
+### Matrix × vector (FF-P2)
+
+For one column the conversion of $A$ dominated `CLMulMatMul`: $1024 \times 1024$ times a vector
+took 9.0 ns per multiply-add at GF(2^32), 17.5 at GF(2^64), 70 at GF(2^128)
+(`bench/matmul_threshold.jl`), against 0.3–3 for square products. The conversion and transpose
+of all of $A$ are paid for a single column, and they grow costlier per entry as $A$ grows (an
+expectation: strided reads missing the cache; see the end of this section).
+
+`clmul_columns_add!` skips the transpose: it reads $A$ in storage order, converts each entry
+when it is used, and keeps the unreduced sums of carry-less products per row of $C$ (64, 128 or
+3 × 128 bits per row, the same accumulators as the transposed path), reduced and converted back
+once per entry. It converts $A$ once per column of $B$, so it pays for one or two columns only.
+`clmul_by_columns(F, m, p, q)` chooses between the two paths:
+
+- $q = 1$: the column path when $A$ has at least **512 KiB**;
+- $q = 2$: when $A$ has at least **4 MiB** and $m, p \ge 256$;
+- otherwise, and for $q \ge 3$, the transposed path.
+
+`bench/matvec.jl` (`sizes`), 2026-11-20, same VM as below, ns per multiply-add, transposed /
+column path (selection; the full output is reproduced by the script):
+
+| shape × q | A | GF(2^16) | GF(2^32) | GF(2^64) | GF(2^128) |
+|---|---|---|---|---|---|
+| 128² × 1 | 32–256 KiB | 1.42 / 1.17 | 1.56 / 1.15 | 3.04 / 3.19 | 19.7 / 16.7 |
+| 512² × 1 | 0.5–4 MiB | 1.95 / 0.75 | 2.95 / 1.12 | 6.15 / 2.87 | 35.4 / 15.3 |
+| 1024² × 1 | 2–16 MiB | 2.99 / 0.71 | 9.23 / 1.11 | 10.3 / 2.79 | 58.5 / 15.5 |
+| 2048² × 1 | 8–64 MiB | 7.46 / 0.66 | 10.1 / 1.05 | 23.2 / 2.99 | 92.3 / 15.4 |
+| 2048² × 2 | 8–64 MiB | 4.29 / 0.69 | 5.92 / 1.13 | 12.3 / 3.00 | 53.2 / 15.7 |
+| 16384 × 16 × 2 | 0.5–4 MiB | 0.88 / 1.17 | 1.40 / 1.18 | 3.05 / 3.31 | 10.3 / 16.9 |
+| 1024² × 8 | 2–16 MiB | 0.66 / 0.69 | 1.65 / 1.08 | 3.57 / 2.94 | 13.9 / 15.3 |
+
+Reading of the measurements (single runs; this VM varies by up to about 40%):
+
+- The column path costs about the same per multiply-add at every size and $q$ (0.7, 1.1, 2.9
+  and 15.5 ns), the cost of one conversion of $A$'s entry plus one product.
+- For a vector it wins from about 512 KiB on (1.1–11×), except a tie at GF(2^128)
+  $16384 \times 16$ (0.99). At 128–256 KiB
+  it won or lost depending on the run and shape (GF(2^128): 0.77–1.18; GF(2^64) $128^2$: 0.95–0.99),
+  hence the threshold.
+- For two columns it wins for large, not thin $A$ (every shape $\ge$ 4 MiB with $m, p \ge 256$:
+  1.02–6.3×); for thin ones it is mixed ($16384 \times 16$ and $16 \times 16384$: 0.61–1.65).
+- From four columns the transposed path amortises its conversion; the column path won only for
+  some large shapes and lost by up to 4× elsewhere, so it is not used.
+
+With the rule, `mul!(y, A, x)` at $1024 \times 1024$ (default strategy, one run): 0.71 (GF(2^16)),
+1.05, 2.94, 14.9 ns (GF(2^128)) per multiply-add, 4.7–8.6× faster than before at GF(2^32) …
+GF(2^128) (the figures above).
+At $128 \times 128$, below the threshold, one run gave 5.65 ns at GF(2^64) against 3.0–3.1 for the
+transposed path in the sweep; not repeated, so unexplained (likely run-to-run noise, not shown).
+
+The bytes of $A$ suggest the cost is the transpose missing the caches (L2 is 2 MiB here), but this is
+not profiled; the thresholds are this VM's and should be re-measured on a CPU with smaller caches.
+A cache-blocked transpose might make the transposed path cheap at every size; not tried.
+
 ### Larger sizes and cache blocking (J8b)
 
 Measured first, then blocked; the blocking did not pay on this machine and was not kept.

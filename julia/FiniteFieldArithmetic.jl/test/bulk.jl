@@ -13,7 +13,7 @@ using FiniteFieldArithmetic
 using FiniteFieldArithmetic: bits, mul, Recursive, MulTable, LogTable16, CLMul, has_pclmul,
     MatMulStrategy, ScalarMatMul, TableMatMul, CLMulMatMul, BitslicedMatMul, BySizeMatMul,
     choose_matmul, bitsliced_threshold, matmul!, default_matmul_strategy, mul_elementwise!,
-    clmul_column_max
+    clmul_by_columns, clmul_columns_add!, clmul_transposed_add!
 using LinearAlgebra, Random, Test
 
 rng = Xoshiro(20261121)
@@ -133,11 +133,10 @@ end
     @test A * B == R
 end
 
-# FF-P2: up to `clmul_column_max(F)` columns of B (matrix × vector in particular), CLMulMatMul works
-# column by column without transposing A. Oracle: ScalarMatMul(MulTable()), checked above.
+# FF-P2: for a vector or two columns and a large A (`clmul_by_columns`), CLMulMatMul works column
+# by column without transposing A. Both paths are tested directly, whichever the rule picks, and
+# through `matmul!` and `*`. Oracle: ScalarMatMul(MulTable()), checked above.
 @testset "CLMulMatMul, few columns (FF-P2), $F" for F in (GF2_16, GF2_32, GF2_64, GF2_128)
-    qmax = clmul_column_max(F)
-    @test qmax isa Int && qmax >= 1
     ref(A, B) = matmul!(ScalarMatMul(MulTable()), similar(A, size(A, 1), size(B, 2)), A, B)
     for (m, p) in ((300, 1100), (1, 50), (50, 1), (65, 3), (0, 4), (4, 0))
         A = rand(rng, F, m, p)
@@ -148,11 +147,27 @@ end
         @test matmul!(CLMulMatMul(), c, A, x) === c
         @test c == R
         @test A * x == R
-        for q in unique((2, qmax, qmax + 1))                         # both sides of the rule
-            B = rand(rng, F, p, q)
-            @test matmul!(CLMulMatMul(), similar(A, m, q), A, B) == ref(A, B)
+        for q in (1, 2, 3)
+            B = q == 1 ? x : rand(rng, F, p, q)
+            RB = q == 1 ? R : ref(A, B)
+            if has_pclmul()
+                for f! in (clmul_columns_add!, clmul_transposed_add!)
+                    C = q == 1 ? fill(one(F), m) : fill(one(F), m, q)
+                    @test f!(C, A, B) === C
+                    @test C == RB .+ one(F)                          # adds to C
+                end
+            end
+            q > 1 && @test matmul!(CLMulMatMul(), similar(A, m, q), A, B) == RB
         end
     end
+    # the rule, at the shapes `bench/matvec.jl sizes` measured (src/bulk.md, "Matrix × vector")
+    big = 1024 ÷ sizeof(F) * 512                     # entries of a 512 KiB matrix
+    @test clmul_by_columns(F, big ÷ 512, 512, 1)
+    @test !clmul_by_columns(F, big ÷ 512 - 1, 512, 1)
+    @test !clmul_by_columns(F, 1024, 1024, 3)
+    @test clmul_by_columns(F, 2048, 2048, 2) && clmul_by_columns(F, 256, 2^22 ÷ sizeof(F) ÷ 256, 2)
+    @test !clmul_by_columns(F, 16, 2^22 ÷ sizeof(F) ÷ 16, 2)          # thin: transposed
+    @test !clmul_by_columns(F, 255, 2^24, 2)
     # strided, non-contiguous A, x and c
     Ap = rand(rng, F, 41, 60)
     A, x = view(Ap, 2:2:40, 1:3:60), view(rand(rng, F, 45), 1:2:40)
@@ -163,10 +178,18 @@ end
     @test matmul!(CLMulMatMul(), c, A, x) == R
     @test cp[2:2:50] == cp0[2:2:50] && cp[41:end] == cp0[41:end]     # the rest untouched
     @test A * x == R
-    # no transpose of A: only the accumulators (at most 48 bytes per row) are allocated
-    A, x, c = rand(rng, F, 512, 512), rand(rng, F, 512), Vector{F}(undef, 512)
-    matmul!(CLMulMatMul(), c, A, x)
-    @test (@allocated matmul!(CLMulMatMul(), c, A, x)) <= 48 * 512 + 512
+    if has_pclmul()
+        c = view(fill!(cp, zero(F)), 1:2:40)
+        @test clmul_columns_add!(c, A, x) == R
+    end
+    # a large A takes the column path: only the accumulators (at most 48 bytes per row) are
+    # allocated, no transposed copy of A
+    m = 1024 ÷ sizeof(F) * 2
+    @test clmul_by_columns(F, m, 512, 1)
+    A, x, c = rand(rng, F, m, 512), rand(rng, F, 512), Vector{F}(undef, m)
+    R = vec(ref(A, reshape(x, :, 1)))
+    @test matmul!(CLMulMatMul(), c, A, x) == R
+    has_pclmul() && @test (@allocated matmul!(CLMulMatMul(), c, A, x)) <= 48 * m + 512
 end
 
 @testset "CLMulMatMul without PCLMULQDQ" begin

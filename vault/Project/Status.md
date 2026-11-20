@@ -17,31 +17,31 @@ slowdown first"), J8e (2026-11-20: "Switch to the tables"), J2b, the default for
 list), **J8b** (2026-11-20: "Please implement the next item!" again, taken the same way;
 packing, cache blocking measured, bitsliced matrix product and vectors done, the rest open) and
 **J8g** (2026-11-20: "yes. once you benchmarked it somewhat it should become the default by
-matrix size!"). Ask before starting a backlog section the maintainer has not approved.
+matrix size!") and **FF-P2** (2026-11-20: "Go ahead with it!"). Ask before starting a backlog
+section the maintainer has not approved.
 
 ## Done last
 
-- **J8b, why inlining both branches of `LazyMulBy`'s `copyto!` slowed the loop** (taken as
-  approved: item 1 of "Next" within the approved J8b, maintainer 2026-11-20 "Please implement the
-  next item!"). Cause: LLVM's loop unswitching. Base's broadcast checks per element and argument
-  whether the argument is extruded (a `select`); LLVM normally hoists both checks out of the loop,
-  but its unswitching cost multiplier grows with the number of loops in a method, so with the
-  table loop in the same method the scalar loop kept one check per element (GF(2^16), 4096
-  elements fused: 1.384 ns against 1.254 for Base). With
-  `JULIA_LLVM_ARGS=--enable-unswitch-cost-multiplier=false` the inlined variant is unswitched
-  fully and runs at 1.255, which confirms it. GF(256) is not affected. The function barrier stays;
-  no library code changed except a comment. Script `bench/constmul_inline.jl`, details in
-  `src/bulk.md`, "Why inlining both branches slowed the loop".
-- **Seen on the way, not measured:** in the scalar GF(2^16) loop the size of the global
-  `NIM256_MUL` table is reloaded every element (possible aliasing with the store into `out`).
-  Could be worth a look; not recorded as a problem because its cost is unknown.
-- **Verified:** `bench/constmul_inline.jl` with and without the LLVM flag (GF(2^16)), once at
-  GF(256); `Pkg.test()` passes (733,299 checks, Julia 1.13.1, x86_64-linux).
-- **Not verified:** other fields than GF(2^16) and GF(256); other Julia/LLVM versions; CI.
+- **FF-P2, `CLMulMatMul` for matrix × vector** (maintainer, 2026-11-20: "Go ahead with it!",
+  finished after "Yes do so!"). A column-wise path that reads $A$ in storage order without
+  transposing it (`clmul_columns_add!`), chosen by `clmul_by_columns(F, m, p, q)`: a vector when
+  $A \ge$ 512 KiB, two columns when $A \ge$ 4 MiB and $m, p \ge 256$. The first plan, a rule on
+  the number of columns per field (`clmul_column_max`), was dropped: `bench/matvec.jl` showed the
+  crossover depends on the size of $A$, and for small $A$ the transposed path is as fast or faster
+  even for a vector. $1024 \times 1024$ times a vector: 9.0 / 17.5 / 70 → 1.05 / 2.94 / 14.9 ns
+  per multiply-add at GF(2^32) / GF(2^64) / GF(2^128). Two bugs in the work-in-progress commit,
+  fixed: `poly_acc_reduce(acc, ::Type{T})` under `@stable` dispatched at runtime per row
+  (938 kB allocated per 512 × 512 product), and `poly_acc_zero` was a union for JET. Details in
+  `src/bulk.md`, "Matrix × vector".
+- **Verified:** `Pkg.test()` passes (733,769 checks, Julia 1.13.1, x86_64-linux);
+  `bench/matvec.jl` and `bench/matvec.jl sizes` (single runs); `mul!(y, A, x)` end to end once.
+- **Not verified:** CPUs with other cache sizes (the thresholds are this VM's); a CPU without
+  `PCLMULQDQ`; other Julia versions; CI. One run at GF(2^64) $128 \times 128$ (5.65 ns, transposed
+  path) was slower than the sweep's 3.0–3.1 and was not repeated.
 
-Before that: J8g (`BitslicedMatMul` the default by size, thresholds 48 … 512 per field,
-`bench/matmul_threshold.jl`), FF-P2 found (`CLMulMatMul` slow for matrix × vector, not fixed),
-the bitsliced matrix product and vectors at GF(2^64)/GF(2^128).
+Before that: J8b, why inlining both branches of `LazyMulBy`'s `copyto!` slowed the loop (LLVM's
+loop unswitching; `bench/constmul_inline.jl`); J8g (`BitslicedMatMul` the default by size); the
+bitsliced matrix product and vectors at GF(2^64)/GF(2^128).
 Earlier: J8b cache blocking (measured, not adopted), J8b packing by bit-matrix transposes, J2b,
 J8e and J8d, J8c, J8, J2a, nimber GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to
 MathStruct. Details in git and the Backlog's *Done*.
@@ -51,12 +51,14 @@ MathStruct. Details in git and the Backlog's *Done*.
 Within the approved J8b, only ARM `PMULL` and GPU kernels remain: they need an ARM machine and a
 GPU and are not doable in this container. Everything else needs the maintainer's go.
 
-Not approved (need the maintainer's go): **FF-P2** (a matrix × vector path for `CLMulMatMul`);
-**J8f** (fewer carry-less products in `CLMulMatMul`, which is now the default only below the
-bitsliced thresholds); faster small bitsliced products (preallocated temporaries, a
-`BitslicedMatrix` type keeping the planes; would lower the thresholds); **FF-P1** (`CLMul` at
-GF(2^64) element by element); **J1a/J1b** (Conway representation, arbitrary $n$); **J3**
-(Itoh–Tsujii, extended Euclid as `inv` strategies); linear algebra on the matrix products (V5).
+Not approved (need the maintainer's go): **J8f** (fewer carry-less products in `CLMulMatMul`);
+a **cache-blocked transpose** in `CLMulMatMul`'s transposed path (might make the column path
+unnecessary and help small $q \ge 3$; an expectation, `src/bulk.md`); faster small bitsliced
+products (preallocated temporaries, a `BitslicedMatrix` type keeping the planes; would lower the
+thresholds); **FF-P1** (`CLMul` at GF(2^64) element by element); **J1a/J1b** (Conway
+representation, arbitrary $n$); **J3** (Itoh–Tsujii, extended Euclid as `inv` strategies);
+linear algebra on the matrix products (V5). Seen earlier, not measured: in the scalar GF(2^16)
+`LazyMulBy` loop the size of the global `NIM256_MUL` table is reloaded every element.
 
 ## Decisions in force (maintainer, 2026-11-19)
 
