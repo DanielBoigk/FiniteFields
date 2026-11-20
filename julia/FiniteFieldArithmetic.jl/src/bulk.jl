@@ -280,6 +280,9 @@ struct TableMatMul <: MatMulStrategy end
 The product in the polynomial basis of [`CLMul`](@ref) (``\\mathbb{F}_{2^n}``, ``n \\ge 16``): both
 matrices are converted once, every entry of the result is a sum of carry-less products, which is
 reduced modulo ``f`` and converted back once (reduction is linear, so it commutes with the sum).
+Up to [`clmul_column_max`](@ref) columns of `B` (a matrix times a vector in particular) `A` is
+not converted as a whole: it is read column by column in storage order and each entry converted
+on the fly, with the unreduced sums kept per row of the result (FF-P2, `src/bulk.md`).
 Needs `PCLMULQDQ` ([`has_pclmul`](@ref)); without it it computes as
 `ScalarMatMul(MulTable())`, and up to ``\\mathbb{F}_{256}`` as [`TableMatMul`](@ref).
 """
@@ -343,6 +346,14 @@ end
                          B::StridedVecOrMat{N}) where {K, T, N <: Nimber{K, T}}
         K <= 3 && return matmul_add!(TableMatMul(), C, A, B)
         has_pclmul() || return matmul_add!(ScalarMatMul(MulTable()), C, A, B)
+        size(B, 2) <= clmul_column_max(N) && return clmul_columns_add!(C, A, B)
+        return clmul_transposed_add!(C, A, B)
+    end
+
+    # C += A B in the polynomial basis, A converted and transposed once, one `poly_dot` per entry
+    # of C. The caller has checked `has_pclmul()` and K ≥ 4.
+    function clmul_transposed_add!(C::StridedVecOrMat{N}, A::StridedMatrix{N},
+                                   B::StridedVecOrMat{N}) where {K, T, N <: Nimber{K, T}}
         m, p = size(A)
         q = size(B, 2)
         At = Matrix{T}(undef, p, m)           # A transposed, so both factors run along k
@@ -358,6 +369,71 @@ end
             C[i, j] += unsafe_frombits(N, from_poly(r))
         end
         return C
+    end
+
+    # C += A B in the polynomial basis column by column (FF-P2): A is read in storage order and
+    # each entry converted when it is used, the unreduced sums of products are kept per row and
+    # reduced once per entry of C. Converts A once per column of B, so it pays for few columns
+    # only (`clmul_column_max`). The caller has checked `has_pclmul()` and K ≥ 4.
+    function clmul_columns_add!(C::StridedVecOrMat{N}, A::StridedMatrix{N},
+                                B::StridedVecOrMat{N}) where {K, T, N <: Nimber{K, T}}
+        acc = Vector{poly_acc_type(T)}(undef, size(A, 1))
+        @inbounds for j in axes(B, 2)
+            fill!(acc, poly_acc_zero(T))
+            for k in axes(A, 2)
+                b = to_poly(bits(B[k, j]))
+                iszero(b) && continue
+                for i in axes(A, 1)
+                    acc[i] = poly_mac(acc[i], to_poly(bits(A[i, k])), b)
+                end
+            end
+            for i in axes(A, 1)
+                C[i, j] += unsafe_frombits(N, from_poly(poly_acc_reduce(acc[i], T)))
+            end
+        end
+        return C
+    end
+end
+
+"""
+    clmul_column_max(F)
+
+The largest number of columns of `B` for which [`CLMulMatMul`](@ref) computes `A * B` column by
+column (converting each entry of `A` when it is used) rather than converting and transposing `A`
+once. 1 (matrix × vector only) until `bench/matvec.jl` has measured where the column-wise path
+stops paying.
+"""
+clmul_column_max(::Type{<:Nimber}) = 1
+
+# Unreduced sums of carry-less products, for clmul_columns_add!: the accumulator type of an
+# n-bit field, its zero, a multiply-accumulate, and the reduction to n bits.
+poly_acc_type(::Type{<:Union{UInt16, UInt32}}) = UInt64     # products of degree < 2n - 1 ≤ 63
+poly_acc_type(::Type{UInt64}) = UInt128
+poly_acc_type(::Type{UInt128}) = NTuple{3, UInt128}         # Karatsuba's three partial products
+poly_acc_zero(::Type{T}) where {T} = zero(poly_acc_type(T))
+poly_acc_zero(::Type{UInt128}) = (zero(UInt128), zero(UInt128), zero(UInt128))
+
+@stable default_mode = "error" begin
+    @inline poly_mac(acc::UInt64, a::T, b::T) where {T <: Union{UInt16, UInt32}} =
+        acc ⊻ (clmul64_unchecked(a % UInt64, b % UInt64) % UInt64)
+    @inline poly_mac(acc::UInt128, a::UInt64, b::UInt64) = acc ⊻ clmul64_unchecked(a, b)
+    @inline function poly_mac(acc::NTuple{3, UInt128}, a::UInt128, b::UInt128)
+        a1, a0 = (a >> 64) % UInt64, a % UInt64
+        b1, b0 = (b >> 64) % UInt64, b % UInt64
+        return (acc[1] ⊻ clmul64_unchecked(a0, b0), acc[2] ⊻ clmul64_unchecked(a1, b1),
+                acc[3] ⊻ clmul64_unchecked(a0 ⊻ a1, b0 ⊻ b1))
+    end
+
+    @inline function poly_acc_reduce(acc::UInt64, ::Type{T}) where {T <: Union{UInt16, UInt32}}
+        n = 8 * sizeof(T)
+        return poly_reduce((acc >> n) % T, acc % T)
+    end
+    @inline poly_acc_reduce(acc::UInt128, ::Type{UInt64}) =
+        poly_reduce((acc >> 64) % UInt64, acc % UInt64)
+    @inline function poly_acc_reduce(acc::NTuple{3, UInt128}, ::Type{UInt128})
+        l, h, m = acc
+        m ⊻= l ⊻ h
+        return poly_reduce(h ⊻ (m >> 64), l ⊻ (m << 64))
     end
 end
 
