@@ -229,7 +229,7 @@ The block is a tuple of $n$ words, the stages are generated per $n$ and unroll c
 block stays in registers. A first version with a heap buffer and loops was 1.5–2.5 times slower
 at GF(2^16) and GF(2^32); a branch-free form of its stage loop was slower still.
 
-`bench/pack.jl`, 2026-11-20, same machine as below, $2^{14}$ elements, three runs each in one
+`bench/pack.jl`, 2026-11-20, a 4-thread Intel Xeon cloud VM (not confirmed to be the machine of the J8 tables below; before and after measured in the same session), $2^{14}$ elements, three runs each in one
 process (spread up to 12%), ns per element:
 
 | field | pack before | pack | unpack before | unpack |
