@@ -10,34 +10,35 @@
 ## Stage
 
 Implementation of approved items. Approved and done so far: J0, the nimber fields GF(2) …
-GF(2^128), J2a, J8 (maintainer, 2026-11-19: "please implement J8!") and J8c (2026-11-19: "I
-kinda want all three"). Ask before starting a
+GF(2^128), J2a, J8 (maintainer, 2026-11-19: "please implement J8!"), J8c (2026-11-19: "I
+kinda want all three") and J8d (2026-11-20: "go with your J8d proposal, fix the GF(2^16)
+slowdown first"). Ask before starting a
 backlog section the maintainer has not approved.
 
 ## Done last
 
-- **J8c — strategies for `c .* a`** (`src/bulk.jl`, note `src/bulk.md`, "Constant times array"),
-  tests and benchmark first (`test/constmul.jl`, `bench/constmul.jl`):
-  - `c .* a`, `a .* c` and `c * a` go through `default_constmul_strategy(F)`: `ScalarConstMul()`
-    (C, Base's behaviour, **still the default everywhere**), `EagerMulBy()` (A), `LazyMulBy(t)`
-    (B: a lazy broadcast of a callable that builds `MulBy` tables only for ≥ `t` elements).
-    Switch per field by redefining `default_constmul_strategy`.
-  - Measured break-even of B (now `mulby_threshold`): 768 / 192 / 256 / 512 elements at
-    GF(2^16) / GF(2^32) / GF(2^64) / GF(2^128); higher than J8's estimate of 40–240. On long arrays
-    B is 2.4–9 times faster than C from GF(2^16) up, alone and fused.
-  - At GF(256) B gains about 2× in `c .* a` and `out .= c .* a`, nothing in `out .= c .* a .+ b`;
-    there A (eager) wins the fused case (0.25–0.30 vs 0.48 ns), not profiled.
-  - Weakness found: B below its threshold is 19–27% slower than C at GF(2^16) in fused
-    expressions (per-element branch, presumably); elsewhere equal.
-  - `ConstMul` uses its own 256-byte table at GF(256) too: 0.20 vs 0.36 ns for indexing the
-    shared product table.
-- **Verified:** `Pkg.test()` passes, 733,795 checks, Julia 1.13.1, x86_64-linux, Aqua and JET
-  included. Benchmarks: one full run on the noisy cloud VM (outliers visible in the raw output;
-  thresholds read off the first length from which B won every expression).
-- **Not verified:** Julia 1.10; ARM; CI (not pushed to `full-ci`); GF(2) … GF(16) thresholds
-  (taken from GF(256)); the cause of the GF(256) and GF(2^16) effects (not profiled).
+- **J8d — `c .* a` uses `MulBy` tables by default from GF(2^16)** (`src/bulk.jl`, note
+  `src/bulk.md`, "Constant times array"), tests first (`test/constmul.jl`):
+  - `default_constmul_strategy`: `LazyMulBy(F)` from GF(2^16) up (thresholds 768 / 192 / 256 /
+    512 at GF(2^16) … GF(2^128), unchanged after three runs), `ScalarConstMul` at GF(256) and
+    below. `EagerMulBy` and the J8c callable `ConstMul` are removed.
+  - The GF(2^16) slowdown is fixed: `LazyMulBy` is now a broadcast style (`ConstMulStyle`) whose
+    marker spreads to the fused expression; `copyto!`/`copy` decide once by the result's length
+    and rewrite the tree, each branch behind a `@noinline` barrier. Below the threshold it equals
+    Base's loop from 1024 elements (1.50 vs 1.50 ns), a few ns per call more below. Two simpler
+    designs (per-element flag, `Union` return) measured 1.80 and 1.74 ns; recorded in the note.
+  - From GF(2^16) up `c .* a` is now 2.4–9 times faster on long arrays, fused included.
+  - The maintainer's question about an allocation-free eager `EagerMul!`: measured
+    (`out .= m.(a); out .+= b` with a prepared `MulBy`), pays only at GF(256) in cache, loses
+    beyond the caches from GF(2^32) up; no new API, the answer is in the note.
+- **Verified:** `Pkg.test()` passes, 732,508 checks, Julia 1.13.1, x86_64-linux, Aqua and JET
+  included. Benchmarks: three full runs of `bench/constmul.jl` on the noisy VM.
+- **Not verified:** Julia 1.10; ARM; CI (not pushed to `full-ci`); thresholds of GF(2) … GF(16);
+  why inlining both branches slowed the loop (not inspected); interaction of `ConstMulStyle` with
+  other packages' broadcast styles (GPU arrays, StaticArrays): it wraps their style and hands the
+  rewritten tree back to it, tested only with Base arrays.
 
-Earlier: J8 (bulk operations: `rand!`, `MulBy`, matrix products, `BitslicedVector`), J2a, nimber
+Earlier: J8c (strategies and measurements for `c .* a`), J8 (bulk operations), J2a, nimber
 GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to MathStruct. Details in git.
 
 ## Next (proposals, need the maintainer's go)
@@ -45,9 +46,9 @@ GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to MathStruct. Details 
 1. **Defaults for `inv`:** `LogTable16` inverts about 2.3 times faster at GF(2^16) and 1.9 times at
    GF(2^32), but its products have about twice the latency of `MulTable`. A separate default
    for `inv` (`default_inv_strategy`) would take both. Decide whether that API is wanted.
-2. **J8d — default for `c .* a`: decide.** Proposal (`src/bulk.md`): `LazyMulBy(F)` from GF(2^16)
-   up, `ScalarConstMul` at GF(256) and below, drop `EagerMulBy`; fix B's 20% below-threshold
-   cost at GF(2^16) first. Nothing changes until the maintainer says so.
+2. **J8e — `LazyMulBy` at GF(256) too?** Since J8d it wins there in every expression from 96
+   elements (1.4–2×), which removes the reason for keeping Base's loop at GF(256). One line plus
+   a threshold; needs the maintainer's go.
 3. **J8b** (Backlog): faster bitsliced packing, cache blocking for large matrices, bitsliced
    matrix products, GPU kernels.
 4. **FF-P1** (`Problems.md`): `CLMul` at GF(2^64) element by element; investigate on a quiet

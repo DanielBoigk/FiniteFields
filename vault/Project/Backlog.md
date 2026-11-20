@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J2a, J8, J8c); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J2a, J8, J8c, J8d); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -96,16 +96,14 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
 - **J6 — Constant time:** not a goal. Document which strategies happen to be constant-time; do not
   engineer for it.
-- **J8d — Default for `c .* a`** (proposal from J8c, needs the maintainer's decision): make
-  `LazyMulBy(F)` the default from GF(2^16) up (2.4–9 times faster on long arrays), keep
-  `ScalarConstMul` at GF(256) and below, drop `EagerMulBy`. Before that, remove the 19–27% cost of
-  `LazyMulBy` below its threshold at GF(2^16) in fused expressions (return Base's broadcast below
-  the threshold, a `Union` of two types; not tried). Details: `src/bulk.md`, "Constant times
-  array".
+- **J8e — `LazyMulBy` at GF(256) and below?** (open, maintainer's decision). Since J8d uses `MulBy`
+  directly, it beats Base's loop at GF(256) in every expression from 96 elements (1.4–2× on long
+  arrays, fused included), which removes the reason J8c gave for keeping `ScalarConstMul` there.
+  Switching is one line plus a threshold (96–128); measured in two runs (`src/bulk.md`).
 - **J8b — Bulk, remaining** (after J8): faster packing of `BitslicedVector`s (bit-matrix
   transposes); bitsliced vectors above GF(2^32) and a bitsliced matrix product; cache blocking of
-  the matrix products; ARM `PMULL`; GPU kernels (needs a GPU to test); why at GF(256) the eager `MulBy` beats the fused
-  loop in `out .= c .* a .+ b` (J8c, not profiled).
+  the matrix products; ARM `PMULL`; GPU kernels (needs a GPU to test); why inlining both branches of `LazyMulBy`'s
+  `copyto!` slowed the loop (J8d, not inspected).
 - **J7 — $\overline{\mathbb{F}}_2$ ("$n = \infty$"):** every element lives in some finite
   $\mathbb{F}_{2^n}$, so elements carry their degree and an operation embeds both operands into
   $\mathbb{F}_{2^{\operatorname{lcm}(m,n)}}$ through Conway polynomials (pseudo-Conway beyond the
@@ -141,6 +139,10 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   `default_constmul_strategy` (`ScalarConstMul`, the default; `EagerMulBy`; `LazyMulBy(t)` with
   a measured `mulby_threshold`: 768 / 192 / 256 / 512 at GF(2^16) … GF(2^128), 256 at GF(256));
   `bench/constmul.jl`; measurements and proposal in `src/bulk.md`. The default is unchanged.
+- **J8d — Lazy tables as the default for `c .* a`** (2026-11-20): `LazyMulBy(F)` is the default
+  from GF(2^16) up, `ScalarConstMul` at GF(256) and below; `EagerMulBy` removed. `LazyMulBy` is a
+  broadcast style (`ConstMulStyle`) decided once at materialisation by the result's length, which
+  removed the 19–27% slowdown below the threshold at GF(2^16). Details in `src/bulk.md`.
 - **T4a — CI** (2026-11-19): path-filtered `lean.yml` and `julia.yml`, and `full-ci.yml` (all
   components plus a Quartz build) on the `full-ci` branch. Not yet run on GitHub.
 - **T6 — Move to MathStruct** (2026-11-19): repository transferred by the maintainer; `baseUrl`
