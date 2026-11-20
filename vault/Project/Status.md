@@ -21,36 +21,35 @@ matrix size!"). Ask before starting a backlog section the maintainer has not app
 
 ## Done last
 
-- **J8g, `BitslicedMatMul` as the default by size.** `default_matmul_strategy(F)` is
-  `BySizeMatMul(TableMatMul() or CLMulMatMul(), BitslicedMatMul(), bitsliced_threshold(F))`:
-  bitsliced when every dimension of the product reaches the threshold, 48 (GF(2), GF(4)), 64
-  (GF(16)), 96 (GF(256)), 192 (GF(2^16)), 256 (GF(2^32)), 512 (GF(2^64)), 384 (GF(2^128)).
-  Measured with the new `bench/matmul_threshold.jl` (square products on a fine grid, then
-  rectangular shapes: with the smallest dimension at the threshold the bitsliced product won in
-  every position, 1.4–20×; with a dimension of 1 or 2 it loses and is not chosen). Details in
-  `src/bitsliced_matmul.md`, "Default by size".
-- **Found on the way:** FF-P2 in `Problems.md`, `CLMulMatMul` is slow for matrix × vector (9–70
-  ns per multiply-add at GF(2^32) … GF(2^128) for 1024 × 1024 times a vector). Pre-existing, not
-  fixed.
-- Before that, in the same session: `BitslicedMatMul` itself and `BitslicedVector` at GF(2^64) and
-  GF(2^128) (J8b; `src/bitsliced_matmul.md`, `src/bulk.md`).
-- **Verified:** `Pkg.test()` passes (733,299 checks), Julia 1.13.1, x86_64-linux, Aqua and
-  JET included; new tests for the choice by size, `*` and `mul!` on both sides of every
-  threshold. `bench/matmul_threshold.jl` once.
-- **Not verified:** CI (not pushed to `full-ci`); a second threshold run (the VM varies up to
-  about 40%, so each threshold is uncertain by one grid step; at GF(2^32) the margin is 1.05×);
-  other CPUs (thresholds measured on one Intel cloud VM); Julia 1.10; ARM.
+- **J8b, why inlining both branches of `LazyMulBy`'s `copyto!` slowed the loop** (taken as
+  approved: item 1 of "Next" within the approved J8b, maintainer 2026-11-20 "Please implement the
+  next item!"). Cause: LLVM's loop unswitching. Base's broadcast checks per element and argument
+  whether the argument is extruded (a `select`); LLVM normally hoists both checks out of the loop,
+  but its unswitching cost multiplier grows with the number of loops in a method, so with the
+  table loop in the same method the scalar loop kept one check per element (GF(2^16), 4096
+  elements fused: 1.384 ns against 1.254 for Base). With
+  `JULIA_LLVM_ARGS=--enable-unswitch-cost-multiplier=false` the inlined variant is unswitched
+  fully and runs at 1.255, which confirms it. GF(256) is not affected. The function barrier stays;
+  no library code changed except a comment. Script `bench/constmul_inline.jl`, details in
+  `src/bulk.md`, "Why inlining both branches slowed the loop".
+- **Seen on the way, not measured:** in the scalar GF(2^16) loop the size of the global
+  `NIM256_MUL` table is reloaded every element (possible aliasing with the store into `out`).
+  Could be worth a look; not recorded as a problem because its cost is unknown.
+- **Verified:** `bench/constmul_inline.jl` with and without the LLVM flag (GF(2^16)), once at
+  GF(256); `Pkg.test()` passes (733,299 checks, Julia 1.13.1, x86_64-linux).
+- **Not verified:** other fields than GF(2^16) and GF(256); other Julia/LLVM versions; CI.
 
+Before that: J8g (`BitslicedMatMul` the default by size, thresholds 48 … 512 per field,
+`bench/matmul_threshold.jl`), FF-P2 found (`CLMulMatMul` slow for matrix × vector, not fixed),
+the bitsliced matrix product and vectors at GF(2^64)/GF(2^128).
 Earlier: J8b cache blocking (measured, not adopted), J8b packing by bit-matrix transposes, J2b,
 J8e and J8d, J8c, J8, J2a, nimber GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to
 MathStruct. Details in git and the Backlog's *Done*.
 
 ## Next
 
-Within the approved J8b (remaining sub-items):
-
-1. Why inlining both branches of `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
-2. ARM `PMULL` and GPU kernels: need an ARM machine and a GPU; not doable in this container.
+Within the approved J8b, only ARM `PMULL` and GPU kernels remain: they need an ARM machine and a
+GPU and are not doable in this container. Everything else needs the maintainer's go.
 
 Not approved (need the maintainer's go): **FF-P2** (a matrix × vector path for `CLMulMatMul`);
 **J8f** (fewer carry-less products in `CLMulMatMul`, which is now the default only below the

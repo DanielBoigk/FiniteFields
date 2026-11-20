@@ -209,7 +209,9 @@ node_threshold(t::ConstTimes) = t.threshold
 
 # Each branch behind a function barrier: with both loops inlined into one method, the fused loop
 # at GF(2^16) ran at 1.63–1.65 ns per element against 1.47–1.49 for Base's (bench, src/bulk.md);
-# with the barrier, equal from 1024 elements, about 9 ns more per call below.
+# with the barrier, equal from 1024 elements, about 9 ns more per call below. Cause: LLVM's loop
+# unswitching budget shrinks with the number of loops in a method, so with both loops in one method
+# a per-element index check of the broadcast stayed in the loop (bench/constmul_inline.jl).
 @noinline unwrapped_copyto!(dest::AbstractArray, bc::Broadcast.Broadcasted, v::Val) =
     copyto!(dest, Broadcast.instantiate(unwrap_constmul(bc, v)))
 @noinline unwrapped_copy(bc::Broadcast.Broadcasted, v::Val) =

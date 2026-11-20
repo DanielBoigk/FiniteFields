@@ -16,7 +16,7 @@
 > code: `src/bulk.jl`; the strategies it builds on in `src/nimber.jl`, `src/nimber_fast.jl`.
 > tests: `test/bulk.jl`, `test/constmul.jl`, `test/jet.jl`.
 > benchmarks: `bench/benchmarks.jl` (groups `bulk <field>`, `matmul <field>`), `bench/run.jl`,
-> `bench/rand_compare.jl`, `bench/constmul.jl`, `bench/pack.jl`, `bench/matmul_sizes.jl`.
+> `bench/rand_compare.jl`, `bench/constmul.jl`, `bench/constmul_inline.jl`, `bench/pack.jl`, `bench/matmul_sizes.jl`.
 
 ## Broadcasting
 
@@ -85,8 +85,35 @@ GF(2^16) in the fused expression, where Base's loop takes 1.50 ns per element:
    led to the style design.
 3. The style design with both branches inlined into `copyto!` still took 1.63–1.65; with each
    branch behind a `@noinline` function it equals Base from 1024 elements (1.49 against 1.49), and
-   costs about 9 ns more per call (about 10% at 64 elements, 2% at 256). Why inlining slows the
-   loop was not inspected (scratch probes, not committed).
+   costs about 9 ns more per call (about 10% at 64 elements, 2% at 256). Why, see below.
+
+**Why inlining both branches slowed the loop** (J8b, 2026-11-20; `bench/constmul_inline.jl`).
+Base's broadcast indexes each argument through `newindex`, which maps the index to 1 when the
+argument is extruded (length 1); in the IR that is a `select` per element and argument. LLVM's
+loop unswitching (`SimpleLoopUnswitch`) normally hoists both checks out of the loop, leaving four
+loop copies with plain indexing. Its cost model multiplies the cost of a non-trivial unswitch by a
+factor that grows with the number of sibling loops in the function; with both branches in one
+method the table loop is already there (four copies of its own), so the scalar loop is unswitched
+on one argument only and keeps a `select` per element for the other. Measured at GF(2^16),
+4096 elements, fused, below the threshold (ns per element, one run, Intel `graniterapids` VM,
+Julia 1.13.1):
+
+| variant | default LLVM | `--enable-unswitch-cost-multiplier=false` |
+|---|---|---|
+| C (Base's broadcast) | 1.254 | 1.256 |
+| barrier (the package) | 1.249 | 1.252 |
+| both branches inlined | **1.384**; 6 loops, 6 index `select`s | 1.255; 8 loops, 0 |
+| only the `*` branch inlined | 1.251; 4 loops, 0 | 1.257; 4 loops, 0 |
+
+With the multiplier switched off (`JULIA_LLVM_ARGS`) the inlined method is unswitched fully and
+as fast as Base, which confirms the cause. At GF(256) the inlined method was unswitched fully
+(17 loops, no `select`) and was not slower (0.404 in all four variants). The function barrier
+stays: it keeps each loop in a method of its own, independent of LLVM's budget. (Other Julia and
+LLVM versions may unswitch differently; not checked.)
+
+Seen on the way, not measured: in both loops the size of the global GF(256) product table
+(`NIM256_MUL`) is reloaded from memory every element, because the store into `out` might alias
+it as far as LLVM knows.
 
 The per-element branch also cost at GF(256): with `MulBy` directly the fused product is 0.33–0.34
 ns against 0.48 for Base, where the J8c callable had been erratic (0.33–0.53).

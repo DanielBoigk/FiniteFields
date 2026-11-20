@@ -98,8 +98,7 @@ alternatives. Printing always hex; the REPL adds the field when it does not fill
   engineer for it.
 - **J8b — Bulk, remaining** (after J8; approved 2026-11-20; packing, the cache-blocking
   measurement, the bitsliced matrix product and bitsliced vectors at every level done, see
-  *Done*): ARM `PMULL`; GPU kernels (needs a GPU to test); why inlining both branches of
-  `LazyMulBy`'s `copyto!` slowed the loop (J8d, not inspected).
+  *Done*): ARM `PMULL`; GPU kernels (needs a GPU to test).
 - **J8f — Fewer carry-less products in `CLMulMatMul`** (proposed 2026-11-20, not approved): the
   matrix product is bound by `PCLMULQDQ` throughput, not by the caches (`src/bulk.md`, "Larger
   sizes and cache blocking"). Two terms per 64-bit product at GF(2^16) ($a_1 + a_2x^{32}$ times
@@ -134,6 +133,11 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   and `/`; `LogTable16` at GF(2^16) (2.7× throughput, less latency) and GF(2^32) (1.4–1.9×
   throughput, 20–50% more latency: chosen for throughput, confirmed by the maintainer 2026-11-20), as `*`
   elsewhere. `inv latency` benchmarks added. Details in `src/nimber_fast.md`, "Default for inv".
+- **J8b — Why inlining both `LazyMulBy` branches slowed the loop** (2026-11-20): LLVM's loop
+  unswitching cost multiplier grows with the loops in a method, so with both loops inlined the
+  scalar loop kept a per-element broadcast index `select` (8–10% at GF(2^16)); confirmed with
+  `--enable-unswitch-cost-multiplier=false`. The function barrier stays. `bench/constmul_inline.jl`;
+  `src/bulk.md`.
 - **J8g — `BitslicedMatMul` as the default by size** (approved and done 2026-11-20):
   `default_matmul_strategy(F)` is `BySizeMatMul(previous default, BitslicedMatMul(), t)`, the
   bitsliced product when every dimension is at least `t = bitsliced_threshold(F)`: 48 (GF(2),
