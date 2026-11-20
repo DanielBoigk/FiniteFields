@@ -11,15 +11,16 @@
 
 using FiniteFieldArithmetic
 using FiniteFieldArithmetic: bits, mul, Recursive, MulTable, LogTable16, CLMul, has_pclmul,
-    MatMulStrategy, ScalarMatMul, TableMatMul, CLMulMatMul, BitslicedMatMul, matmul!,
-    default_matmul_strategy, mul_elementwise!
+    MatMulStrategy, ScalarMatMul, TableMatMul, CLMulMatMul, BitslicedMatMul, BySizeMatMul,
+    choose_matmul, bitsliced_threshold, matmul!, default_matmul_strategy, mul_elementwise!
 using LinearAlgebra, Random, Test
 
 rng = Xoshiro(20261121)
 const LEVELS = (GF2, GF4, GF16, GF256, GF2_16, GF2_32, GF2_64, GF2_128)
 const MATMUL_STRATEGIES = (ScalarMatMul(Recursive()), ScalarMatMul(MulTable()),
                            ScalarMatMul(LogTable16()), TableMatMul(), CLMulMatMul(),
-                           BitslicedMatMul())
+                           BitslicedMatMul(), BySizeMatMul(ScalarMatMul(Recursive()),
+                                                           BitslicedMatMul(), 5))
 
 refmul(a, b) = mul(Recursive(), a, b)
 function refmatmul(A::AbstractMatrix{F}, B::AbstractVecOrMat{F}) where {F}
@@ -237,4 +238,39 @@ end
     A, B = rand(rng, F, m, p), rand(rng, F, p, q)
     R = matmul!(ScalarMatMul(MulTable()), similar(A, m, q), A, B)
     @test matmul!(BitslicedMatMul(), similar(A, m, q), A, B) == R
+end
+
+# --- J8g: the default by size (src/bitsliced_matmul.md, "Default by size") ---------------------
+#
+# `*` and `mul!` use BitslicedMatMul when every dimension of the product reaches the field's
+# measured threshold, the field's previous default below. Oracle: the previous default, checked
+# against Recursive above.
+
+@testset "BySizeMatMul chooses by the smallest dimension" begin
+    s = BySizeMatMul(TableMatMul(), BitslicedMatMul(), 10)
+    @test choose_matmul(s, 10, 10, 10) === BitslicedMatMul()
+    @test choose_matmul(s, 100, 10, 1000) === BitslicedMatMul()
+    for (m, p, q) in ((9, 10, 10), (10, 9, 10), (10, 10, 9), (1000, 1000, 1))
+        @test choose_matmul(s, m, p, q) === TableMatMul()
+    end
+    @test_throws ArgumentError BySizeMatMul(TableMatMul(), BitslicedMatMul(), 0)
+end
+
+@testset "default by size (J8g), $F" for F in LEVELS
+    s = default_matmul_strategy(F)
+    t = bitsliced_threshold(F)
+    @test s isa BySizeMatMul && s.large === BitslicedMatMul() && s.threshold == t
+    @test s.small === (degree(F) <= 8 ? TableMatMul() : CLMulMatMul())
+    @test t >= 1
+    for (m, p, q) in ((t, t, t), (t + 1, t, t + 3), (t - 1, t, t + 1), (t, t + 2, t - 1))
+        A, B = rand(rng, F, m, p), rand(rng, F, p, q)
+        R = matmul!(s.small, similar(A, m, q), A, B)
+        @test A * B == R
+        C0 = rand(rng, F, m, q)
+        α, β = rand(rng, F), rand(rng, F)
+        @test mul!(copy(C0), A, B, true, true) == R + C0
+        @test mul!(copy(C0), A, B, α, β) == refmul.(R, Ref(α)) + refmul.(C0, Ref(β))
+        x = rand(rng, F, p)                                   # matrix × vector: q = 1
+        @test A * x == matmul!(s.small, similar(x, m), A, x)
+    end
 end

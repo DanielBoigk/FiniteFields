@@ -3,7 +3,8 @@
 # throws on any type-unstable call to an arithmetic method; the test suite exercises them all.)
 using FiniteFieldArithmetic
 using FiniteFieldArithmetic: mul, inverse, Recursive, MulTable, LogTable, LogTable16, CLMul,
-    ScalarMatMul, TableMatMul, CLMulMatMul, BitslicedMatMul, matmul!, mul_elementwise!, ScalarConstMul,
+    ScalarMatMul, TableMatMul, CLMulMatMul, BitslicedMatMul, BySizeMatMul, matmul!,
+    default_matmul_strategy, mul_elementwise!, ScalarConstMul,
     LazyMulBy, const_mul_broadcasted
 using JET, Test
 
@@ -35,7 +36,8 @@ using JET, Test
         A, B, C = fill(x, 3, 3), fill(x, 3, 3), fill(x, 3, 3)
         m = MulBy(x)
         @test_opt m(x)
-        for s in (ScalarMatMul(MulTable()), TableMatMul(), CLMulMatMul(), BitslicedMatMul())
+        for s in (ScalarMatMul(MulTable()), TableMatMul(), CLMulMatMul(), BitslicedMatMul(),
+                  default_matmul_strategy(F), BySizeMatMul(TableMatMul(), BitslicedMatMul(), 2))
             @test_opt matmul!(s, C, A, B)
         end
         @test_opt A * B
