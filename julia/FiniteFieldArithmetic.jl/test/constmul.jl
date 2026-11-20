@@ -80,7 +80,8 @@ end
 @testset "mixed and non-array operands are left alone, $F" for F in (GF16, GF2_64)
     with_constmul(F, LazyMulBy(0)) do
         a = rand(rng, F, 20)
-        @test GF256(5) .* a == GF256(5) .* GF256.(a)             # other field: scalar product
+        @test GF2(1) .* a == a                                   # other field: scalar product
+        @test GF4(2) .* a == cm_refmul.(Ref(F(2)), a)
         @test (rand(rng, F, 4) .* rand(rng, F)) isa Vector{F}
         x, y = rand(rng, F), rand(rng, F)
         @test x .* y == cm_refmul(x, y)                          # scalars: no arrays
@@ -114,14 +115,14 @@ end
 end
 
 # Allocations: the scalar strategy and the lazy one below the threshold allocate nothing in fused
-# expressions; above the threshold the lazy one allocates its tables only (and up to GF(256)
-# nothing, its table being a column of the product table).
+# expressions; above the threshold the lazy one allocates its tables only (256 B at GF(256) …
+# 64 KiB at GF(2^128)).
 @testset "allocations, $F" for F in CM_LEVELS
     a, b, out = rand(rng, F, 1000), rand(rng, F, 1000), Vector{F}(undef, 1000)
     c = rand(rng, F)
-    tabbytes = degree(F) <= 8 ? 0 : 256 * sizeof(FiniteFieldArithmetic.storagetype(F))^2
+    tabbytes = 256 * sizeof(FiniteFieldArithmetic.storagetype(F))^2
     for (s, limit) in ((ScalarConstMul(), 0), (LazyMulBy(typemax(Int)), 0),
-                       (LazyMulBy(0), tabbytes == 0 ? 0 : tabbytes + 256))
+                       (LazyMulBy(0), tabbytes + 256))
         with_constmul(F, s) do
             cm_fused(out, c, a, b); cm_into(out, c, a)           # compile
             @test (@allocated cm_fused(out, c, a, b)) <= limit
