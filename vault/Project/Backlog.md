@@ -4,7 +4,7 @@
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
 > approves sections for implementation (so far: J0, the nimber fields, J1a, J2a, J3, J2b, J8, J8b, J8c, J8d, J8e, J8g, J9, FF-P2); `Status.md` says which.
 
-Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
+Sections: **V** vault content, **T** tooling and site, **R** research, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
 
 ## V — Vault content
@@ -75,6 +75,15 @@ comes first in every section.
 - **L3 — Generalisation survey:** list mathlib results stated only for $\mathbb{R}$, $\mathbb{C}$
   or `RCLike` that hold over any field, then restate them generically.
 - **L4 — Proof sweep:** discharge the sorry ledger.
+
+## R — Research
+
+- **R1 — Canonical extension of the nimbers, step 2** (proposed 2026-11-21, not approved): a
+  research implementation of $\mathbf{On}_2$ below $\omega^{\omega^\omega}$ (radical towers over
+  the nimbers, ordinal order, Kummer bases); the excesses $\alpha_u$ for the 17 primes
+  $47 \le u \le 127$; the rank-encoding data (change of basis, embeddings) for every
+  $n \le 128$; checks against Lenstra's table, the nimbers and the field axioms. Then ADR-0005
+  and a library type. See [[Canonical extension of the nimbers]].
 
 ## J — Julia (`FiniteFieldArithmetic.jl`)
 

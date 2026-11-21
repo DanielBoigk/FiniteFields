@@ -25,6 +25,16 @@ section the maintainer has not approved.
 
 ## Done last
 
+- **Research: a canonical extension of the nimbers to every $\mathbb{F}_{2^n}$** (maintainer
+  2026-11-21: rejected StandardFF for its pseudo-random choices, asked for a canonical structure;
+  "Do that!"). Note [[Canonical extension of the nimbers]], scripts in
+  `research/nimber_closure/`. Result: Conway's $\mathbf{On}_2$ below $\omega^{\omega^\omega}$
+  (DiMuro, arXiv:1108.0962, after Lenstra 1977); Lenstra's table of $\alpha_u$ ($u \le 43$)
+  verified with our nimber arithmetic; only $\mathbb{F}_{2^{2^k}}$ are initial segments, but
+  the **rank of an element in ordinal order** is a canonical, linear $n$-bit encoding equal to
+  the nimber value for $n = 2^k$. Needed and unknown: the excesses for the 17 primes 47 … 127.
+  Nothing in the library changed.
+
 - **J3, inversion strategies** (`src/inversion.jl`, note `src/inversion.md`, tests
   `test/inversion.jl`, benchmark `bench/inversion.jl`): `Fermat()`, `ItohTsujii()` (Frobenius
   powers as byte tables built per field at compile time, an unrolled `@generated` chain),
@@ -94,6 +104,10 @@ every element.
 
 ## Environment notes
 
+- 2026-11-21: the **FiniteFields** environment now also allows `arxiv.org`, `export.arxiv.org`,
+  `www.math.leidenuniv.nl`, `pub.math.leidenuniv.nl`, `en.wikipedia.org`, `oeis.org` (for the
+  research note; added in this session). Lenstra, *On the algebraic closure of two* (1977) was
+  not found there; his *Nim multiplication* (IHES/M/78/211) is at `pub.math.leidenuniv.nl/~hwl/PUBLICATIONS/1978a/art.pdf`.
 - Cloud sessions: use the personal environment **FiniteFields** (allows `release.lean-lang.org`,
   `releases.lean-lang.org`, `cache.mathlib.org`, `pkg.julialang.org`). Start sessions with
   `MathStruct/FiniteFields` as the source; this session still pushes through GitHub's redirect from
@@ -106,6 +120,11 @@ every element.
 
 ## Open questions for the maintainer
 
+00. **Canonical extension of the nimbers** ([[Canonical extension of the nimbers]], "Proposal"):
+   adopt ADR-0005 (rank encoding of $\mathbb{F}_{2^n} \subset \mathbf{On}_2$ as the default for
+   every $n$, `Nimber` unchanged for $n = 2^k$; Conway/AES/GHASH as alternatives)? And approve
+   research step 2 (compute the missing excesses and the encoding data for $n \le 128$)? If yes,
+   J1a's open items 0(a) (root convention) and the pseudo-Conway question become moot for the default.
 0. **J1a decisions taken provisionally (2026-11-21), please confirm or change:**
    (a) the nimber ↔ Conway isomorphism sends $\alpha_{2^k}$ to the *smaller integer* of the two
    compatible roots ($r_3 =$ `0x61` in GF(256); table in `src/polyfield.md`); (b) no implicit
