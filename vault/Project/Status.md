@@ -4,7 +4,7 @@
 > that starts reads it after `AGENTS.md`; a session that ends updates it. Replace stale text
 > rather than appending; history belongs in git.
 
-**Last updated:** 2026-11-20, on branch **`dev-danielb`** (the working branch; pushed).
+**Last updated:** 2026-11-21, on branch **`dev-danielb`** (the working branch; pushed).
 `plan/agents-handoff` is merged into it and no longer used.
 
 ## Stage
@@ -17,27 +17,36 @@ slowdown first"), J8e (2026-11-20: "Switch to the tables"), J2b, the default for
 list), **J8b** (2026-11-20: "Please implement the next item!" again, taken the same way;
 packing, cache blocking measured, bitsliced matrix product and vectors done, the rest open) and
 **J8g** (2026-11-20: "yes. once you benchmarked it somewhat it should become the default by
-matrix size!"), **FF-P2** (2026-11-20: "Go ahead with it!") and **J9** (2026-11-20: asked "What
-is the next item? Please implement!", then chose J9 when asked which). Ask before starting a backlog
-section the maintainer has not approved.
+matrix size!"), **FF-P2** (2026-11-20: "Go ahead with it!"), **J9** (2026-11-20: asked "What
+is the next item? Please implement!", then chose J9 when asked which) and **J1a** (2026-11-21:
+"Please implement the next item!", then chose J1a, Conway fields, when asked which). Ask before
+starting a backlog section the maintainer has not approved.
 
 ## Done last
 
-- **J9, the smallest field of an element (nimbers)**: `minimal_level`, `minimal_degree`,
-  `reduce_field` (exported) in `src/subfield.jl`, note `src/subfield.md`, benchmark
-  `bench/subfield.jl`. All from the bit length, since every subfield of
-  $\mathbb{F}_{2^{2^K}}$ is a nimber level. `reduce_field` is type-unstable (allowed by the
-  maintainer); one branch per level made it 3.5–4.7 ns per element instead of 180–205 ns when
-  it built `Nimber{j, S}` at runtime. The other representations are J9b (after J1a/J1b/J7).
-- **Verified:** `Pkg.test()` passes (947,134 checks, Julia 1.13.1, x86_64-linux), including the
-  Frobenius oracle on every element of GF(2) … GF(2^16), JET `@test_opt` on `minimal_level` and
-  `minimal_degree`; `bench/subfield.jl` (single run).
-- **Not verified:** other Julia versions; CI; the jldoctest in `minimal_degree`'s docstring
-  (no Documenter run; checked by hand: 0x1b has 5 bits, level 3, degree 8).
+- **J1a, first part: polynomial-basis and Conway fields** (`src/polyfield.jl`, note
+  `src/polyfield.md`, data `src/conway_table.jl`, tests `test/conway.jl`, benchmark
+  `bench/polyfield.jl`). `PolyElement{N, T, F}` = $\mathbb{F}_2[x]/(x^N + F)$ for $N \le 128$;
+  `poly_field(n, low)`; `conway_field(n)` for the 113 degrees $\le 128$ in Lübeck's table (not
+  128); `GF256_AES`, `GF2_128_GHASH`; `embed` between Conway fields ($m \mid n$) and between
+  Conway and nimber fields of degree $2^k \le 64$. Products: carry-less multiplication plus
+  Barrett reduction (exactness proved in the note). Inverses: extended Euclid (Fermat at 128).
+  A small refactor: `PolyBasis(F, α)` in `src/nimber_fast.jl` takes the root.
+- **Measured** (`src/polyfield.md`): Conway products 2.5–3 ns up to degree 64, 9 ns above;
+  *faster than the nimber defaults from GF(2^32) up* (2.5 vs 18.9 ns at 64; GHASH 8.4 vs 40.5 at
+  128), slower below (2.9 vs 0.4 ns at GF(256)). Inverses slow (400 ns at 64, 3 µs GHASH).
+  Nimber ↔ Conway 0.2–1.9 ns per element; Conway → Conway 335 ns – 1.5 µs.
+- **Verified:** `Pkg.test()` passes (Julia 1.13.1, x86_64-linux), incl. Aqua and JET
+  (`@test_opt` on products/inverses of six polynomial fields). Table: every entry irreducible
+  and compatible with its divisors, primitive for $n \le 64$, the least such polynomial for
+  $n \le 16$ (independent BigInt oracle). Products against the oracle on every Conway field,
+  exhaustive up to $n = 10$; FIPS-197 AES vectors.
+- **Not verified:** primitivity of the table entries above degree 64 (needs factorisations of
+  $2^n - 1$); a GCM test vector for `GF2_128_GHASH` (bit order differs, documented); other Julia
+  versions; CI; the jldoctest of `conway_field` (no Documenter run).
 
-Before that: FF-P2, `CLMulMatMul` for matrix × vector (a column-wise path chosen by the size of
-$A$, `src/bulk.md`, "Matrix × vector"); J8b, why inlining both branches of `LazyMulBy`'s
-`copyto!` slowed the loop; J8g (`BitslicedMatMul` the default by size); the bitsliced matrix
+Before that: J9 (smallest field of a nimber), FF-P2 (`CLMulMatMul` for matrix × vector), J8b
+(inlining `LazyMulBy`), J8g (`BitslicedMatMul` the default by size), the bitsliced matrix
 product and vectors at GF(2^64)/GF(2^128).
 Earlier: J8b cache blocking (measured, not adopted), J8b packing by bit-matrix transposes, J2b,
 J8e and J8d, J8c, J8, J2a, nimber GF(2) … GF(2^128), ADR-0004, `AGENTS.md`, CI, the move to
@@ -45,19 +54,19 @@ MathStruct. Details in git and the Backlog's *Done*.
 
 ## Next
 
-Within the approved J8b, only ARM `PMULL` and GPU kernels remain: they need an ARM machine and a
-GPU and are not doable in this container. Everything else needs the maintainer's go.
+Within the approved J1a (Backlog, "J1a — Representations, remaining"): byte-table Conway →
+Conway embeddings, table strategies for small Conway fields, bulk operations for `PolyElement`
+can go ahead. Two parts need a decision first: **pseudo-Conway polynomials** for $n = 128$ and the
+other missing degrees (not canonical: which construction?), and **isomorphisms between AES/GHASH
+and Conway fields** (one of $n$, or all). Within J8b only ARM `PMULL` and GPU kernels remain
+(not doable in this container).
 
-Not approved (need the maintainer's go): **J8f** (fewer carry-less products in `CLMulMatMul`);
-a **cache-blocked transpose** in `CLMulMatMul`'s transposed path (might make the column path
-unnecessary and help small $q \ge 3$; an expectation, `src/bulk.md`); faster small bitsliced
-products (preallocated temporaries, a `BitslicedMatrix` type keeping the planes; would lower the
-thresholds); **FF-P1** (`CLMul` at GF(2^64) element by element); **J1a/J1b** (Conway
-representation, arbitrary $n$); **J3** (Itoh–Tsujii, extended Euclid as `inv` strategies);
-linear algebra on the matrix products (V5); **J9b** (smallest field for Conway fields $\mathbb{F}_{2^k}$:
-the integer `minimal_degree` or the smallest field type via `reduce_field`; with or after
-J1a/J1b, requested by the maintainer 2026-11-20). Seen earlier, not measured: in the scalar GF(2^16)
-`LazyMulBy` loop the size of the global `NIM256_MUL` table is reloaded every element.
+Not approved (need the maintainer's go): **J9b** (smallest field for Conway fields; now possible,
+J1a exists); **J3** (inversion strategies; the polynomial-basis inverse needs it most: 400 ns at
+degree 64); **J8f**; a cache-blocked transpose in `CLMulMatMul`; faster small bitsliced products;
+**FF-P1**; **J1b** (arbitrary $n$, above 128); linear algebra (V5). Seen earlier, not measured:
+in the scalar GF(2^16) `LazyMulBy` loop the size of the global `NIM256_MUL` table is reloaded
+every element.
 
 ## Decisions in force (maintainer, 2026-11-19)
 
@@ -85,6 +94,16 @@ J1a/J1b, requested by the maintainer 2026-11-20). Seen earlier, not measured: in
 
 ## Open questions for the maintainer
 
+0. **J1a decisions taken provisionally (2026-11-21), please confirm or change:**
+   (a) the nimber ↔ Conway isomorphism sends $\alpha_{2^k}$ to the *smaller integer* of the two
+   compatible roots ($r_3 =$ `0x61` in GF(256); table in `src/polyfield.md`); (b) no implicit
+   promotion or `==` between fields: maps only through `embed`; (c) names `PolyElement`,
+   `poly_field`, `conway_field`, `embed`, `GF256_AES`, `GF2_128_GHASH`; (d) the Conway data is
+   Lübeck's, taken from the GPL-3 `sagemath/conway-polynomials` mirror (provenance and sha256 in
+   `src/conway_table.jl`); the polynomials are mathematical facts, but say if you want the
+   licensing checked or a different source; (e) Conway/polynomial-basis products are 4–7× faster
+   than the nimber defaults from GF(2^32) up (measurement in `src/polyfield.md`): does that
+   change anything in ADR-0004 for bulk work?
 1. **Learners on finite fields:** when you are ready, write the ideas down (a research-question
    note in `vault/Research Questions/`), so the arithmetic API can be checked against them.
 2. **GitHub Pages:** check that the repository's Pages setting serves the `gh-pages` branch.

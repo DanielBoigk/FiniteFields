@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J2a, J2b, J8, J8b, J8c, J8d, J8e, J8g); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J1a, J2a, J2b, J8, J8b, J8c, J8d, J8e, J8g, J9, FF-P2); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -78,11 +78,22 @@ comes first in every section.
 
 ## J — Julia (`FiniteFieldArithmetic.jl`)
 
-- **J1a — Representations:** nimbers for $n = 2^k$ (subfields nested as integers), Conway
-  polynomials for every $n$ (pseudo-Conway beyond the tables), standard polynomials (AES, GHASH,
-  ...) for cryptanalysis and interoperability; selected by a type parameter; conversion maps
-  between them. **Decided (2026-11-19):** nimbers default, Conway secondary, the others
-alternatives. Printing always hex; the REPL adds the field when it does not fill its storage.
+- **J1a — Representations, remaining** (approved 2026-11-21; first part done, see *Done*):
+  nimbers for $n = 2^k$, Conway polynomials for every $n$ (pseudo-Conway beyond the tables),
+  standard polynomials (AES, GHASH, ...); selected by a type parameter; conversion maps between
+  them. **Decided (2026-11-19):** nimbers default, Conway secondary, the others alternatives.
+  Printing always hex; the REPL adds the field when it does not fill its storage. Open:
+  - **pseudo-Conway polynomials** for the degrees missing from Lübeck's table ($n = 128$ and 14
+    others below it), compatible with the table; not canonical, so the construction needs the
+    maintainer's choice;
+  - **isomorphisms between AES/GHASH and the Conway fields** (there are $n$; which one, or all);
+  - **Conway → Conway embeddings by byte tables** per pair (now 335 ns – 1.5 µs per element,
+    the nimber isomorphisms 0.2–1.9 ns);
+  - **table strategies** for small Conway fields (products 2.9 ns against 0.4 for nimber
+    GF(256)); fast inversion is J3 (Euclid one bit at a time: 400 ns at degree 64);
+  - bulk operations (`MulBy`, matrix products) for `PolyElement`;
+  - whether Conway fields of different degrees should promote (and compare equal) through
+    `embed`, as nimbers do; that needs `hash` through the smallest subfield (J9b).
 - **J1b — Arbitrary $n$:** a function (or macro, if a function cannot give type stability) that
   constructs $\mathbb{F}_{2^n}$ for any $n$: picks the smallest fitting `UInt` for $n \le 128$,
   multi-word storage above; finds an irreducible polynomial (low-weight trinomial or pentanomial
@@ -136,6 +147,15 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
 
 ## Done
 
+- **J1a, first part — polynomial-basis and Conway fields** (approved 2026-11-21, done
+  2026-11-21): `PolyElement{N, T, F}` ($\mathbb{F}_2[x]/(x^N + F)$, $N \le 128$, smallest
+  `UInt`), `poly_field(n, low)` (Rabin's test), `conway_field(n)` for the 113 degrees $\le 128$
+  of Lübeck's table (`src/conway_table.jl`; all entries checked irreducible and compatible,
+  primitive up to 64, least up to 16), `GF256_AES`, `GF2_128_GHASH`; products by carry-less
+  multiplication and Barrett reduction (2.5–3 ns up to degree 64, 9 ns above), inverses by
+  extended Euclid (Fermat at 128); `embed` between Conway fields and, for $2^k \le 64$, between
+  Conway and nimber fields, by a compatible choice of roots (the smaller of two at each level,
+  to be confirmed by the maintainer). Details and measurements in `src/polyfield.md`.
 - **J9 — Smallest field of an element, nimbers** (approved and done 2026-11-20):
   `minimal_level(x)`, `minimal_degree(x)` $= [\mathbb{F}_2(x) : \mathbb{F}_2]$ and
   `reduce_field(x)`, from the bit length (every subfield of $\mathbb{F}_{2^{2^K}}$ is a nimber
