@@ -10,6 +10,7 @@ using Test
     @testset "smallest field of an element (J9)" include("subfield.jl")
     @testset "polynomial-basis and Conway fields (J1a)" include("conway.jl")
     @testset "inversion strategies (J3)" include("inversion.jl")
+    @testset "rank-encoded fields GF(2^n) in On_2 (J10)" include("nimfield.jl")
     @testset "printing" include("printing.jl")
     @testset "static checks" begin
         include("aqua.jl")

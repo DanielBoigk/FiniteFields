@@ -42,6 +42,15 @@ using JET, Test
         @test_opt x^7
     end
     @test_opt conway_field(Val(8))
+    # rank-encoded fields (J10)
+    for F in (nim_field(Val(3)), nim_field(Val(12)), nim_field(Val(107)), nim_field(Val(127)))
+        x, y = F(5), F(3)
+        @test_opt x * y
+        @test_opt inv(x)
+        @test_opt x / y
+        @test_opt minimal_degree(x)
+    end
+    @test_opt embed(nim_field(Val(12)), nim_field(Val(3))(5))
     # inversion strategies (J3)
     for F in (GF256, GF2_16, GF2_64, GF2_128, conway_field(Val(8)), conway_field(Val(64)),
               conway_field(Val(127)), GF2_128_GHASH)
