@@ -32,8 +32,7 @@ section the maintainer has not approved.
   `research/nimber_closure/`). Lenstra's $\alpha_u$ computed for every prime $u \le 127$
   (the 13 of his table reproduced from scratch, 17 new, e.g. $\alpha_{47} = \chi_{23} + 1$,
   $\alpha_{107} = \chi_{53} + 1$); rank-encoding data (internal generator, minimal polynomial,
-  change of basis, all inclusions) for $n = 1 \dots 128$ except $n = 107$ (degree-884 676 tower, still
-  running when this was written; checks ran on the other 127). Checks pass: Lenstra's table, base-field
+  change of basis, all inclusions) for $n = 1 \dots 128$ ($n = 107$, tower degree 884 676, took an hour). Checks pass: Lenstra's table, base-field
   independence, irreducibility, rank = nimber for $n = 2^k$, inclusions are compatible ring
   homomorphisms, and rank = ordinal position by brute force for 13 small fields.
   Not done: the order-preservation proof is a sketch (R2); no library type yet (J10); nothing in

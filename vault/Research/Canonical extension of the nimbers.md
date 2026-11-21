@@ -199,7 +199,7 @@ inclusions of every $\mathbb{F}_{2^m}$, $m \mid n$. Data: `data/rank/n_*.txt` (o
 these are the inputs of the library type). The random $y$ and the spanning set do not affect any
 rank; $g$ only fixes the internal basis.
 
-Largest towers: $n = 107$ (degree 884 676; **still running at the time of this commit**, data to follow), $n = 47, 94$ (237 820; 107 s, 187 s),
+Largest towers: $n = 107$ (degree 884 676; 3 629 s, about an hour, single core), $n = 47, 94$ (237 820; 107 s, 187 s),
 $n = 59, 118$ (143 724; 116 s, 118 s); all other $n$ under 4 s each.
 
 Checks (`check_rank_data.jl`, all pass):
