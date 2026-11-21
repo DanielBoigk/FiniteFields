@@ -1,0 +1,3 @@
+# R1 intermediate files: serialized echelon bases (rebuilt by rank_encoding.jl) and run logs
+data/rank/basis_*.jls
+logs/

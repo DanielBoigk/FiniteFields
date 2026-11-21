@@ -6,7 +6,8 @@
 > field $\mathbf{On}_2$ below $\omega^{\omega^\omega}$. Only the $\mathbb{F}_{2^{2^k}}$ are
 > initial segments there; for other $n$ the elements are large ordinals, but numbering the
 > elements of $\mathbb{F}_{2^n}$ by their rank in ordinal order gives a canonical, $\mathbb{F}_2$-linear,
-> $n$-bit encoding that *is* the nimber value when $n = 2^k$. No library code; a proposal at the end.
+> $n$-bit encoding that *is* the nimber value when $n = 2^k$. R1 (below) computed all of it for
+> $n \le 128$: Lenstra's $\alpha_u$ for every prime $u \le 127$ (17 of them new) and the rank-encoding data.
 
 > Sources (read): J. DiMuro, *On On_p*, arXiv:1108.0962v3 (2015): Lemma 1.1, Theorem 3.1,
 > Lemma 3.6, Proposition 4.1, Theorem 4.3, Corollary 4.4, Theorem 4.6, Table 1 (which, per
@@ -125,34 +126,100 @@ polynomials provide by a table, here provided by $\mathbf{On}_2$; with rank coor
 $\mathbb{F}_{2^n}$ also gets a canonical $\mathbb{F}_2$-basis, which Conway polynomials do not
 give (they give a canonical generator).
 
-## Feasibility (not measured; expectations)
+## Results of R1 (2026-11-21)
 
-1. **Excesses for $u \le 127$.** Unknown for the 17 primes $47 \le u \le 127$ (needed for every
-   $n \le 128$ with such a prime factor, e.g. $n = 47, 94, 53, 106, \dots, 127$). By Theorem 4.6
-   each is a search over $m = 0, 1, \dots$ with one $u$-th power test each, in a field of degree
-   about $d(\alpha_u) = d(\chi_u)/u$, at most about 8 300 by the estimates ($u = 107$, via
-   $\chi_{53}$). An exponentiation in $\mathbb{F}_{2^{8300}}$ with a fast polynomial basis is
-   expected to take seconds. Expectation: feasible.
-2. **The echelon bases of $\mathbb{F}_{2^n}$** inside fields of degree up to about $885\,000$
-   ($n = 107$). Directly (traces, root finding) that looks too slow. But the structure helps:
-   $\mathbb{F}_2(\chi_u) = K(\chi_u)$ with $\chi_u^u = \alpha_u \in K$ is a Kummer extension, and
-   $\mathbb{F}_{2^u}$ in it has a basis $c_i \chi_u^i$, $i < u$, with each $c_i \in K$ solving
-   $\sigma(c_i) = c_i \lambda^{-i}$ ($\sigma$ the $u$-th power of Frobenius on $K$,
-   $\lambda = \alpha_u^{(2^u-1)/u}$), a Hilbert 90 problem in $K$ (this derivation is a sketch, not
-   checked). These vectors already have distinct leading digits. Expectation: minutes per field; for composite $n$ combine the prime
-   power parts. To be measured.
-3. **Correctness** can be checked against Table 1 (done for $u \le 43$), against the nimbers
-   ($n = 2^k$: rank = value), by field axioms in rank coordinates, and by the compatibility of all
-   embeddings; the definitions could later be connected to CombinatorialGames' Lean `Nimber`.
+Approved by the maintainer ("Approve ADR-0005 and R1, go ahead with step 2"), see
+[[ADR-0005 Rank encoding of GF(2^n) in Conway's On2]]. Code in `research/nimber_closure/`:
+`On2.jl` (towers of radical extensions over a nimber field; ordinals per Lemma 1.1; Frobenius
+powers as composable maps, so $x \mapsto x^{2^s}$ costs the same for every $s$; norms and traces
+by doubling), `compute_excesses.jl`, `rank_encoding.jl`, and the checks `check_On2.jl`,
+`check_rank_data.jl`.
 
-## Proposal (needs the maintainer's decision)
+### Lenstra's $\alpha_u$ for every prime $u \le 127$
 
-- **ADR-0005 (proposed): the canonical representation of $\mathbb{F}_{2^n}$ is the rank
-  encoding of $\mathbb{F}_{2^n} \subset \mathbf{On}_2$**, extending `Nimber` (identical for
-  $n = 2^k$); Conway fields (J1a) and AES/GHASH stay as alternative representations, connected by
-  `embed`. This replaces ADR-0004's "Conway for every other $n$", and makes the open J1a
-  questions (pseudo-Conway, the nimber ↔ Conway root convention) moot for the default.
-- **Research step 2 (proposed):** implement $\mathbf{On}_2$ below $\omega^{\omega^\omega}$ as a
-  research tool (radical towers over the nimbers, ordinal order, Kummer bases), compute the
-  missing excesses up to 127 and the rank-encoding data for $n \le 128$, with the checks of item 3.
-  Then the library part (a `Nim{n}`-like type for every $n$) as its own backlog item.
+Computed from scratch for each odd prime in increasing order: $Q(f(u))$ by Theorem 4.3 with the
+degrees $d(\cdot)$ computed in the towers (no lcm assumption), then the excess search of
+Theorem 4.6 with the $u$-th power test via the norm to $\mathbb{F}_{2^{f(u)}}$. Lenstra's table is
+not used, only compared afterwards. Data: `data/excesses.tsv`, `data/relations.jl`.
+
+| $u$ | $f(u)$ | $Q(f(u))$ | excess | $\alpha_u$ | $d(\chi_u)$ |
+|---|---|---|---|---|---|
+| 3 | 2 | 2 | 0 | $2$ | 6 |
+| 5 | 4 | 4 | 0 | $4$ | 20 |
+| 7 | 3 | 3 | 1 | $\chi_3 + 1$ | 42 |
+| 11 | 10 | 5 | 1 | $\chi_5 + 1$ | 220 |
+| 13 | 12 | 3, 4 | 0 | $\chi_3 + 4$ | 156 |
+| 17 | 8 | 8 | 0 | $16$ | 136 |
+| 19 | 18 | 9 | 4 | $\chi_9 + 4$ | 684 |
+| 23 | 11 | 11 | 1 | $\chi_{11} + 1$ | 5 060 |
+| 29 | 28 | 4, 7 | 0 | $\chi_7 + 4$ | 2 436 |
+| 31 | 5 | 5 | 1 | $\chi_5 + 1$ | 620 |
+| 37 | 36 | 4, 9 | 0 | $\chi_9 + 4$ | 1 332 |
+| 41 | 20 | 5 | 1 | $\chi_5 + 1$ | 820 |
+| 43 | 14 | 7 | 1 | $\chi_7 + 1$ | 1 806 |
+| **47** | 23 | 23 | 1 | $\chi_{23} + 1$ | 237 820 |
+| **53** | 52 | 13 | 1 | $\chi_{13} + 1$ | 8 268 |
+| **59** | 58 | 29 | 1 | $\chi_{29} + 1$ | 143 724 |
+| **61** | 60 | 3, 5 | 0 | $\chi_5 + \chi_3$ | 3 660 |
+| **67** | 66 | 3, 11 | 0 | $\chi_{11} + \chi_3$ | 44 220 |
+| **71** | 35 | 5, 7 | 0 | $\chi_7 + \chi_5$ | 29 820 |
+| **73** | 9 | 9 | 1 | $\chi_9 + 1$ | 1 314 |
+| **79** | 39 | 13 | 1 | $\chi_{13} + 1$ | 12 324 |
+| **83** | 82 | 41 | 1 | $\chi_{41} + 1$ | 68 060 |
+| **89** | 11 | 11 | 1 | $\chi_{11} + 1$ | 19 580 |
+| **97** | 48 | 3, 16 | 0 | $\chi_3 + 256$ | 4 656 |
+| **101** | 100 | 25 | 1 | $\chi_{25} + 1$ | 10 100 |
+| **103** | 51 | 3, 17 | 0 | $\chi_{17} + \chi_3$ | 42 024 |
+| **107** | 106 | 53 | 1 | $\chi_{53} + 1$ | 884 676 |
+| **109** | 36 | 4, 9 | 0 | $\chi_9 + 4$ | 3 924 |
+| **113** | 28 | 4, 7 | 0 | $\chi_7 + 4$ | 9 492 |
+| **127** | 7 | 7 | 1 | $\chi_7 + 1$ | 5 334 |
+
+(Bold: not in Lenstra's table. $\chi_3 = \omega$, $\chi_9 = [\omega^3]$, $\chi_5 = [\omega^\omega]$,
+… as above; a sum of $\chi$'s plus a finite part is both the nim-sum and the ordinal sum.)
+Prime powers: $\chi_{u^{k+1}}^{\,u} = \chi_{u^k}$, $d$ multiplied by $u$ (Theorem 3.1(5)).
+
+Checks: the 13 primes $u \le 43$ agree with Lenstra's table in excess and $Q(f(u))$; all 30
+results are identical when every tower is built over $\mathbb{F}_{2^{16}}$ instead of
+$\mathbb{F}_{256}$; the machinery passes field axioms, $x^{2^E} = x$, Frobenius maps against
+repeated squaring, and the norm-based $u$-th power test against the direct exponent
+(`check_On2.jl`). Each run takes seconds (3.6 s for $u = 107$). The degree estimates of Finding 1
+were right except where they assumed a factor 4 from an unknown excess ($d(\chi_{127}) = 5\,334$,
+not 10 668).
+
+### The rank encoding for $n = 1 \dots 128$
+
+For each $n$: the tower $L_n$ (base nimber field containing $\mathbb{F}_{2^{2\text{-part}}}$ and the
+relation scalars, odd generators for the odd prime powers of $n$), a spanning set of
+$\mathbb{F}_{2^n}$ (products of the nimber bits and the Frobenius conjugates of a normal element
+$\operatorname{Tr}_{L_n/\mathbb{F}_{2^r}}(y)$ for each odd prime power $r \| n$), its reduced echelon
+basis by the ordinal order, and from it, in rank coordinates: an internal generator $g$ (the
+first basis element $b_j$ of degree $n$), its minimal polynomial, the powers $g^i$, and the
+inclusions of every $\mathbb{F}_{2^m}$, $m \mid n$. Data: `data/rank/n_*.txt` (one file per $n$;
+these are the inputs of the library type). The random $y$ and the spanning set do not affect any
+rank; $g$ only fixes the internal basis.
+
+Largest towers: $n = 107$ (degree 884 676; **still running at the time of this commit**, data to follow), $n = 47, 94$ (237 820; 107 s, 187 s),
+$n = 59, 118$ (143 724; 116 s, 118 s); all other $n$ under 4 s each.
+
+Checks (`check_rank_data.jl`, all pass):
+1. every minimal polynomial is irreducible (Rabin, via the package's `poly_field`);
+2. for $n = 2^k$ (all eight), products in rank coordinates equal `Nimber` products;
+3. every inclusion $\mathbb{F}_{2^m} \subset \mathbb{F}_{2^n}$ is an injective ring homomorphism,
+   and inclusions compose along every chain $l \mid m \mid n$;
+4. $\mathbb{F}_8 \subset \mathbb{F}_{64}$ matches `gf8_as_ordinals.jl`;
+5. **rank = position in ordinal order**, by brute force: for every $n$ whose tower has degree
+   $\le 20$ (13 fields, up to $2^{20}$ elements), all elements of $\mathbb{F}_{2^n}$ are enumerated
+   in the tower and sorted as ordinals; the $k$-th is the element of rank $k$. This checks
+   Finding 2 (order-preservation and linearity) directly on those fields.
+
+Not checked: the order-preservation proof is still a sketch (check 5 covers small fields only);
+nothing is formalized in Lean; Lenstra's 1977 paper itself was not read.
+
+## Next
+
+A library type for the rank-encoded $\mathbb{F}_{2^n}$, $n \le 128$, built from
+`data/rank/n_*.txt` (backlog J10, proposed): products through the internal polynomial basis
+(the J1a `PolyElement` arithmetic, Barrett with carry-less products) and the change of basis;
+`Nimber` for $n = 2^k$ unchanged; `embed` by the inclusion matrices; equality and hashing across
+degrees through the smallest subfield.

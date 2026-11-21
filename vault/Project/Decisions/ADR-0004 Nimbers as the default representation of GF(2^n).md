@@ -1,6 +1,7 @@
 #design #characteristic-2
 
-> **Status:** accepted (2026-11-19, maintainer). Elements of $\mathbb{F}_{2^{2^k}}$ are nimbers by
+> **Status:** accepted (2026-11-19, maintainer); the part "Conway polynomials … the default for every other $n$" is superseded by [[ADR-0005 Rank encoding of GF(2^n) in Conway's On2]] (2026-11-21).
+> Elements of $\mathbb{F}_{2^{2^k}}$ are nimbers by
 > default; Conway polynomials are the secondary representation and the default for every other
 > $n$; the cryptographers' polynomials (AES, GHASH, ...) are alternatives for cryptanalysis and
 > interoperability.

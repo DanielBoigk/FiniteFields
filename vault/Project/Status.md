@@ -20,10 +20,24 @@ packing, cache blocking measured, bitsliced matrix product and vectors done, the
 matrix size!"), **FF-P2** (2026-11-20: "Go ahead with it!"), **J9** (2026-11-20: asked "What
 is the next item? Please implement!", then chose J9 when asked which) and **J1a** (2026-11-21:
 "Please implement the next item!", then chose J1a, Conway fields, when asked which) and **J3**
-(2026-11-21: "Why is J3 not approved? I would say I approve it!"). Ask before starting a backlog
+(2026-11-21: "Why is J3 not approved? I would say I approve it!"), **ADR-0005 and R1**
+(2026-11-21: "Approve ADR-0005 and R1, go ahead with step 2"). Ask before starting a backlog
 section the maintainer has not approved.
 
 ## Done last
+
+- **R1 and ADR-0005: the rank encoding of every $\mathbb{F}_{2^n} \subset \mathbf{On}_2$**
+  ([[ADR-0005 Rank encoding of GF(2^n) in Conway's On2]], accepted; results in
+  [[Canonical extension of the nimbers]], "Results of R1"; code and data in
+  `research/nimber_closure/`). Lenstra's $\alpha_u$ computed for every prime $u \le 127$
+  (the 13 of his table reproduced from scratch, 17 new, e.g. $\alpha_{47} = \chi_{23} + 1$,
+  $\alpha_{107} = \chi_{53} + 1$); rank-encoding data (internal generator, minimal polynomial,
+  change of basis, all inclusions) for $n = 1 \dots 128$ except $n = 107$ (degree-884 676 tower, still
+  running when this was written; checks ran on the other 127). Checks pass: Lenstra's table, base-field
+  independence, irreducibility, rank = nimber for $n = 2^k$, inclusions are compatible ring
+  homomorphisms, and rank = ordinal position by brute force for 13 small fields.
+  Not done: the order-preservation proof is a sketch (R2); no library type yet (J10); nothing in
+  Lean. The package itself is unchanged.
 
 - **Research: a canonical extension of the nimbers to every $\mathbb{F}_{2^n}$** (maintainer
   2026-11-21: rejected StandardFF for its pseudo-random choices, asked for a canonical structure;
@@ -120,11 +134,10 @@ every element.
 
 ## Open questions for the maintainer
 
-00. **Canonical extension of the nimbers** ([[Canonical extension of the nimbers]], "Proposal"):
-   adopt ADR-0005 (rank encoding of $\mathbb{F}_{2^n} \subset \mathbf{On}_2$ as the default for
-   every $n$, `Nimber` unchanged for $n = 2^k$; Conway/AES/GHASH as alternatives)? And approve
-   research step 2 (compute the missing excesses and the encoding data for $n \le 128$)? If yes,
-   J1a's open items 0(a) (root convention) and the pseudo-Conway question become moot for the default.
+00. **Next for the canonical encoding:** approve **J10** (the library type for every $n \le 128$
+   from the R1 data) and/or **R2** (write out the proof; a Lean statement)? With ADR-0005 the J1a
+   questions 0(a) (root convention) and pseudo-Conway are moot for the default; J1a stays as the
+   Conway alternative.
 0. **J1a decisions taken provisionally (2026-11-21), please confirm or change:**
    (a) the nimber ↔ Conway isomorphism sends $\alpha_{2^k}$ to the *smaller integer* of the two
    compatible roots ($r_3 =$ `0x61` in GF(256); table in `src/polyfield.md`); (b) no implicit
