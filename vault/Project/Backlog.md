@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J1a, J2a, J3, J10, R1, R2, J2b, J8, J8b, J8c, J8d, J8e, J8g, J9, FF-P2); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J1a, J2a, J3, J10, R1, R2, R3, J2b, J8, J8b, J8c, J8d, J8e, J8g, J9, FF-P2); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **R** research, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -77,6 +77,26 @@ comes first in every section.
 - **L4 — Proof sweep:** discharge the sorry ledger.
 
 ## R — Research
+
+- **R3 — Lean: tower digits = binary digits (DiMuro's Lemma 1.1)** (approved 2026-11-21: "lean
+  proof approved! Add it to the backlog."). The one unformalized link between the R1 data (ranks
+  computed with tower digits: monomials in the $\chi_r$ times finite nimber bits) and
+  `nimSum_lt_of_rank_lt` (binary digits). On CombinatorialGames' `Nimber`:
+  1. one step: CombinatorialGames' `IsRing.eval_eq_of_lt` already says that for a ring $x$ with
+     `X ^ n ≤ leastNoRoots x` and $p$ of degree $< n$ with coefficients $< x$, the nim value
+     $p(x)$ is the ordinal `oeval x p` $= [x^{n-1} a_{n-1} + \dots + a_0]$ (this *is* Lemma 1.1);
+  2. nesting: iterate it over a tower $g_1 < \dots < g_k$ to get the ordinal of
+     $\sum_e g_k^{e_k} \cdots g_1^{e_1} c_e$, and prove that the ordinal order on such elements is
+     lexicographic in (monomial, then $c_e$), i.e. that the colex order on tower digits equals
+     `digits_strictMono`'s order on binary digits (a statement about ordinal arithmetic:
+     Cantor normal form base $x$ versus base 2);
+  3. conclude: for a finite subfield given in a tower, the reduced echelon basis for tower digits
+     is the one for binary digits, so `nimSum_lt_of_rank_lt` applies to the R1 ranks.
+  Hypotheses of step 1 for a concrete $x$ (that $x$ is a field and the degree of
+  `leastNoRoots x`) are *inputs* here, not proved: for $x = \omega$ that is exactly the
+  `proof_wanted leastNoRoots_omega0` ($\omega^3 = 2$) of CombinatorialGames. Proving the
+  concrete relations (Theorem 3.1, Lenstra's $\alpha_u$, R1's 17 new values) is a separate, much
+  larger task, not part of R3 (not approved).
 
 ## J — Julia (`FiniteFieldArithmetic.jl`)
 

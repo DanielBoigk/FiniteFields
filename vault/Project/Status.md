@@ -156,8 +156,11 @@ every element.
 ## Open questions for the maintainer
 
 00. **Next:** within the approved J10, faster `minimal_degree`/`hash`, bulk operations for `Nim`,
-   and `embed` between `Nim` and the Conway fields remain (Backlog). Not approved: a Lean
-   proof of DiMuro's Lemma 1.1 (tower digits = binary digits); J9b for Conway fields.
+   and `embed` between `Nim` and the Conway fields remain (Backlog). Approved, not started:
+   **R3**, the Lean proof that tower digits and binary digits give the same order (DiMuro's
+   Lemma 1.1; CombinatorialGames' `IsRing.eval_eq_of_lt` covers one step; plan in the Backlog).
+   Not approved: Lean proofs of the concrete relations ($\omega^3 = 2$, Lenstra's $\alpha_u$);
+   J9b for Conway fields.
 0. **J1a decisions taken provisionally (2026-11-21), please confirm or change:**
    (a) the nimber ↔ Conway isomorphism sends $\alpha_{2^k}$ to the *smaller integer* of the two
    compatible roots ($r_3 =$ `0x61` in GF(256); table in `src/polyfield.md`); (b) no implicit
