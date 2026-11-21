@@ -30,7 +30,7 @@ conjecture or an expectation. When you find something wrong, fix it or record it
 | `vault/` | the Obsidian vault, published with Quartz: concept notes, specifications, project records |
 | `vault/Project/` | `Status.md` (handoff), `Backlog.md`, `Problems.md`, `Decisions/` (ADRs) |
 | `vault/templates/` | note templates; start every new note from one |
-| `lean/` | Lean 4 + mathlib (`lean-toolchain` and the mathlib tag in `lakefile.lean` move together) |
+| `lean/` | Lean 4 + mathlib + CombinatorialGames (`lean-toolchain`, the mathlib tag and the other pins in `lakefile.lean` move together; `vault/Project/Lean and mathlib.md`) |
 | `julia/` | Julia packages, one directory each; `julia/FiniteFieldArithmetic.jl/` (`src/`, `test/`, `bench/`, a note `x.md` beside each `src/x.jl`) |
 | `site/` | the Quartz build: `build.sh`, `quartz.config.ts`, `quartz.layout.ts` |
 | `flake.nix`, `flake.lock` | dev shells; see the README |
@@ -76,7 +76,9 @@ conjecture or an expectation. When you find something wrong, fix it or record it
 ## Lean conventions
 
 - **mathlib first.** Search mathlib before defining anything; import the narrowest module; cite
-  the exact declaration and link it. Policy details: `vault/Project/Lean and mathlib.md`.
+  the exact declaration and link it. **Then other Lean libraries:** if mathlib lacks it and another
+  library has it, use that library (maintainer, 2026-11-21). Policy details:
+  `vault/Project/Lean and mathlib.md`.
 - **Generalise what mathlib over-specialises.** A result stated in mathlib only for
   $\mathbb{R}$, $\mathbb{C}$ or `RCLike` that holds over any field (or any field of a given
   characteristic) is restated and proved generically in our library, with a link to the

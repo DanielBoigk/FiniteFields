@@ -164,9 +164,10 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
   `minimal_degree`/`reduce_field` (J9b for the default). Products 3.6–58 ns. Details in
   `src/nimfield.md`.
 - **R2 — The rank encoding is order-preserving** (approved and done 2026-11-21): proof written out
-  ([[Rank encoding is order-preserving]]); its combinatorial step formalized in Lean without
-  `sorry` (`lean/FiniteFields/RankEncoding.lean`, `spanSum_strictMono`); the On_2 digit structure
-  (DiMuro Lemma 1.1) not formalized.
+  ([[Rank encoding is order-preserving]]); formalized in Lean without `sorry`, on
+  CombinatorialGames' `Nimber` (`lean/FiniteFields/RankEncoding.lean`,
+  `lean/FiniteFields/NimberDigits.lean`, `nimSum_lt_of_rank_lt`), with binary digits; the link to
+  the tower digits of R1 (DiMuro Lemma 1.1) not formalized.
 - **R1 — Canonical extension of the nimbers, step 2** (approved and done 2026-11-21): research
   implementation of Conway's $\mathbf{On}_2$ below $\omega^{\omega^\omega}$
   (`research/nimber_closure/`); Lenstra's $\alpha_u$ for every prime $u \le 127$ (13 reproduce

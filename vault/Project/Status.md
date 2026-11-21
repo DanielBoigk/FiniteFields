@@ -22,9 +22,20 @@ is the next item? Please implement!", then chose J9 when asked which) and **J1a*
 "Please implement the next item!", then chose J1a, Conway fields, when asked which) and **J3**
 (2026-11-21: "Why is J3 not approved? I would say I approve it!"), **ADR-0005 and R1**
 (2026-11-21: "Approve ADR-0005 and R1, go ahead with step 2"), **J10 and R2** (2026-11-21:
-"J10 & R2 approved!"). Ask before starting a backlog section the maintainer has not approved.
+"J10 & R2 approved!"), and the Lean connection to CombinatorialGames' `Nimber` (2026-11-21: "I'd
+say approved. If the proof is not in mathlib but some other lean library use it!"). Ask before
+starting a backlog section the maintainer has not approved.
 
 ## Done last
+
+- **R2 on CombinatorialGames' `Nimber`** (`lean/FiniteFields/NimberDigits.lean`): binary digits of
+  ordinals; nim-addition = symmetric difference of digits, ordinal order = colex of digits, and the
+  rank encoding is order-preserving for any reduced echelon family of nimbers
+  (`nimSum_lt_of_rank_lt`); no `sorry`, standard axioms only, `lake build` passes. New Lean
+  dependency CombinatorialGames `061f2c9` (last commit on v4.36.0; builds against our mathlib tag).
+  Policy recorded: other Lean libraries before own definitions (`AGENTS.md`, `Lean and mathlib`).
+  Not formalized: tower digits = binary digits (DiMuro Lemma 1.1); existence of echelon bases.
+  Not verified: the Lean CI run (`lean.yml`) with the new dependency.
 
 - **J10: `nim_field(n)` for every $n \le 128$** (`src/nimfield.jl`, note `src/nimfield.md`, data
   `src/nim_data.jl` generated from R1, tests `test/nimfield.jl`, benchmark `bench/nimfield.jl`):
@@ -146,7 +157,7 @@ every element.
 
 00. **Next:** within the approved J10, faster `minimal_degree`/`hash`, bulk operations for `Nim`,
    and `embed` between `Nim` and the Conway fields remain (Backlog). Not approved: a Lean
-   connection of the digit structure to CombinatorialGames' `Nimber`; J9b for Conway fields.
+   proof of DiMuro's Lemma 1.1 (tower digits = binary digits); J9b for Conway fields.
 0. **J1a decisions taken provisionally (2026-11-21), please confirm or change:**
    (a) the nimber ↔ Conway isomorphism sends $\alpha_{2^k}$ to the *smaller integer* of the two
    compatible roots ($r_3 =$ `0x61` in GF(256); table in `src/polyfield.md`); (b) no implicit

@@ -42,6 +42,17 @@ theorem mem_spanSum {b : ι → Finset α} {e : Finset ι} {x : α} :
     obtain ⟨j, hj⟩ := card_pos.1 hpos
     exact mem_biUnion.2 ⟨j, (mem_filter.1 hj).1, (mem_filter.1 hj).2⟩
 
+/-- Adding one more basis vector adds its digit set (symmetric difference). -/
+theorem spanSum_insert {b : ι → Finset α} {e : Finset ι} {j : ι} (hj : j ∉ e) :
+    spanSum b (insert j e) = b j ∆ spanSum b e := by
+  ext x
+  rw [mem_symmDiff, mem_spanSum, mem_spanSum, filter_insert]
+  by_cases hx : x ∈ b j
+  · simp only [hx, ↓reduceIte]
+    rw [card_insert_of_notMem (by simp [hj])]
+    simp [Nat.odd_add_one]
+  · simp [hx]
+
 /-- **The rank encoding is order-preserving.** For a reduced echelon family `b` (largest digits
 strictly increasing, each largest digit absent from the other members), `e ↦ spanSum b e` is
 strictly monotone for the colexicographic orders. -/

@@ -11,8 +11,10 @@
 > $\mathbf{On}_2$ below $\omega^{\omega^\omega}$); see [[Canonical extension of the nimbers]].
 > mathlib: [`Finset.Colex.toColex_lt_toColex_iff_max'_mem`](https://leanprover-community.github.io/mathlib4_docs/Mathlib/Combinatorics/Colex.html#Finset.Colex.toColex_lt_toColex_iff_max'_mem),
 > [`Finset.Colex.geomSum_lt_geomSum_iff_toColex_lt_toColex`](https://leanprover-community.github.io/mathlib4_docs/Mathlib/Combinatorics/Colex.html#Finset.Colex.geomSum_lt_geomSum_iff_toColex_lt_toColex).
-> Lean: `lean/FiniteFields/RankEncoding.lean`, `FiniteFields.RankEncoding.spanSum_strictMono`,
-> `spanSum_lt_of_rank_lt` (step 2, complete, no `sorry`). Step 1 is not formalized.
+> Lean (complete, no `sorry`, only the standard axioms): `lean/FiniteFields/RankEncoding.lean`
+> (`spanSum_strictMono`, `spanSum_lt_of_rank_lt`: step 2) and `lean/FiniteFields/NimberDigits.lean`
+> (`digits_add`, `digits_strictMono`, `nimSum_lt_of_rank_lt`: step 1 for binary digits, on
+> CombinatorialGames' `Nimber`, and the theorem for nimbers).
 > Checked numerically: `research/nimber_closure/check_rank_data.jl` (check 5, all elements of 13
 > fields up to $2^{20}$ elements).
 
@@ -89,11 +91,31 @@ theorem spanSum_lt_of_rank_lt (b : ℕ → Finset α) (hne : ∀ i, (b i).Nonemp
     toColex (spanSum b e) < toColex (spanSum b e')
 ```
 
-## Not formalized
+## Step 1 in Lean: binary digits instead of tower digits
 
-Step 1 (the digit structure of $\mathbf{On}_2$ below $\omega^{\omega^\omega}$) rests on DiMuro's
-Lemma 1.1 and Theorem 3.1; connecting it to CombinatorialGames' Lean `Nimber` (which proves the
-simplest extension theorems) is open. Comparison with $\mathbb{R}$, $\mathbb{C}$: there is no
+The formal proof uses a simpler digit structure than the tower of step 1, valid on *all*
+ordinals and needing no description of $\mathbf{On}_2$ at all: the **binary Cantor normal form**
+$o = 2^{e_1} + 2^{e_2} + \dots$ ($e_1 > e_2 > \dots$), `digits o` $= \{e_1, e_2, \dots\}$.
+
+- `digits_add`: nim-addition is the symmetric difference of binary digits. Proof: every nimber is
+  the nim-sum $\sum_{e \in \text{digits}} {*}2^e$ (by `Nimber.two_opow_log_add`), and for
+  $r < 2^m$ the nim-sum ${*}2^m + {*}r$ is the ordinal $2^m + r$ (`IsGroup.add_eq_of_lt`, since
+  $2^m$ is a group, `IsGroup.two_opow`); in characteristic 2 the common digits cancel.
+- `digits_strictMono`: the ordinal order is colex on binary digits (compare $\log_2$, then the
+  remainders, by well-founded induction).
+- `nimSum_lt_of_rank_lt`: for any nimbers $b_i$ forming a reduced echelon family for their binary
+  digits, $\sum_{i \in e} b_i$ increases strictly with $\sum_{i \in e} 2^i$.
+
+So the theorem holds for every finite $\mathbb{F}_2$-subspace of the nimbers, in particular every
+finite subfield, with "digit" meaning binary digit. The R1 computation used *tower* digits
+(monomials times nimber bits, step 1 above); that both give the same order is DiMuro's Lemma 1.1,
+which stays the one unformalized link between the computed data and the Lean theorem (it is also
+what check 5 of `check_rank_data.jl` tests by brute force). Not formalized either: the existence of
+a reduced echelon basis (standard linear algebra).
+
+## Remarks
+
+Comparison with $\mathbb{R}$, $\mathbb{C}$: there is no
 analogue: an ordered field has no finite subfields, and here the order is not a field order
 (it is compatible neither with multiplication nor with translation $x \mapsto x + c$); the lemma
 says only that rank coordinates enumerate the subfield in increasing order.
