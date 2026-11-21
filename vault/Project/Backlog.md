@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J1a, J2a, J2b, J8, J8b, J8c, J8d, J8e, J8g, J9, FF-P2); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J1a, J2a, J3, J2b, J8, J8b, J8c, J8d, J8e, J8g, J9, FF-P2); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -90,7 +90,7 @@ comes first in every section.
   - **Conway → Conway embeddings by byte tables** per pair (now 335 ns – 1.5 µs per element,
     the nimber isomorphisms 0.2–1.9 ns);
   - **table strategies** for small Conway fields (products 2.9 ns against 0.4 for nimber
-    GF(256)); fast inversion is J3 (Euclid one bit at a time: 400 ns at degree 64);
+    GF(256); inverses 14 ns with Itoh–Tsujii against 0.3);
   - bulk operations (`MulBy`, matrix products) for `PolyElement`;
   - whether Conway fields of different degrees should promote (and compare equal) through
     `embed`, as nimbers do; that needs `hash` through the smallest subfield (J9b).
@@ -102,7 +102,11 @@ comes first in every section.
   and computed variants where possible (maintainer, 2026-11-19), small fields probably tables
   only: shift-and-add, log/antilog tables (small $n$), carry-less multiplication (x86 `PCLMULQDQ`, ARM `PMULL` via LLVM
   intrinsics), reduction for sparse polynomials; profiled.
-- **J3 — Inversion and division:** Fermat, extended Euclid, Itoh–Tsujii; benchmarked.
+- **J3 — Inversion and division, remaining** (approved 2026-11-21; strategies done, see
+  *Done*): division without a separate inverse (Euclid started at $s_1 = x$ gives $x/y$
+  directly; `/` is still `x * inv(y)`); a faster Euclid (branch-free, or several quotient bits
+  per step); bulk inversion (Montgomery's trick: $3(k-1)$ products and one inverse for $k$
+  elements).
 - **J4 — $\mathbb{F}_p$** in the smallest fitting `UInt`; Barrett/Montgomery as options.
 - **J5 — $\mathbb{F}_{p^n}$ generic.**
 - **J6 — Constant time:** not a goal. Document which strategies happen to be constant-time; do not
@@ -147,6 +151,12 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
 
 ## Done
 
+- **J3 — Inversion strategies** (approved and done 2026-11-21): `InvStrategy` with `Fermat()`,
+  `ItohTsujii()` (Frobenius powers as byte tables, compile-time per field), `Euclid()` (no wider
+  type needed, so also at degree 128; for nimbers from GF(2^16) up through the `CLMul` basis),
+  for nimbers and polynomial bases alike. `ItohTsujii` is the default `inv` for polynomial
+  bases (2–3× Euclid: 81 ns at degree 64, 340 ns GHASH); the nimber defaults (norm recursion)
+  stay, faster than all three. Details in `src/inversion.md`.
 - **J1a, first part — polynomial-basis and Conway fields** (approved 2026-11-21, done
   2026-11-21): `PolyElement{N, T, F}` ($\mathbb{F}_2[x]/(x^N + F)$, $N \le 128$, smallest
   `UInt`), `poly_field(n, low)` (Rabin's test), `conway_field(n)` for the 113 degrees $\le 128$

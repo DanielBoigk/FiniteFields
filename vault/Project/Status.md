@@ -19,10 +19,20 @@ packing, cache blocking measured, bitsliced matrix product and vectors done, the
 **J8g** (2026-11-20: "yes. once you benchmarked it somewhat it should become the default by
 matrix size!"), **FF-P2** (2026-11-20: "Go ahead with it!"), **J9** (2026-11-20: asked "What
 is the next item? Please implement!", then chose J9 when asked which) and **J1a** (2026-11-21:
-"Please implement the next item!", then chose J1a, Conway fields, when asked which). Ask before
-starting a backlog section the maintainer has not approved.
+"Please implement the next item!", then chose J1a, Conway fields, when asked which) and **J3**
+(2026-11-21: "Why is J3 not approved? I would say I approve it!"). Ask before starting a backlog
+section the maintainer has not approved.
 
 ## Done last
+
+- **J3, inversion strategies** (`src/inversion.jl`, note `src/inversion.md`, tests
+  `test/inversion.jl`, benchmark `bench/inversion.jl`): `Fermat()`, `ItohTsujii()` (Frobenius
+  powers as byte tables built per field at compile time, an unrolled `@generated` chain),
+  `Euclid()` (first step removes $x^n$, so no wider type and also degree 128; nimbers through
+  the `CLMul` basis from GF(2^16) up). Default `inv` for polynomial bases is now `ItohTsujii`
+  (2–3× Euclid; GHASH 3.1 µs → 340 ns); nimber defaults unchanged (faster than all three).
+  Verified: `Pkg.test()` passes, JET `@test_opt` on all strategies. Not verified: CI, other Julia
+  versions; the two explanations of the timings in the note are labelled unprofiled.
 
 - **J1a, first part: polynomial-basis and Conway fields** (`src/polyfield.jl`, note
   `src/polyfield.md`, data `src/conway_table.jl`, tests `test/conway.jl`, benchmark
@@ -61,9 +71,11 @@ other missing degrees (not canonical: which construction?), and **isomorphisms b
 and Conway fields** (one of $n$, or all). Within J8b only ARM `PMULL` and GPU kernels remain
 (not doable in this container).
 
+Within the approved J3 (Backlog, "J3 — remaining"): division by Euclid directly, a faster
+Euclid, bulk inversion (Montgomery's trick).
+
 Not approved (need the maintainer's go): **J9b** (smallest field for Conway fields; now possible,
-J1a exists); **J3** (inversion strategies; the polynomial-basis inverse needs it most: 400 ns at
-degree 64); **J8f**; a cache-blocked transpose in `CLMulMatMul`; faster small bitsliced products;
+J1a exists); **J8f**; a cache-blocked transpose in `CLMulMatMul`; faster small bitsliced products;
 **FF-P1**; **J1b** (arbitrary $n$, above 128); linear algebra (V5). Seen earlier, not measured:
 in the scalar GF(2^16) `LazyMulBy` loop the size of the global `NIM256_MUL` table is reloaded
 every element.
