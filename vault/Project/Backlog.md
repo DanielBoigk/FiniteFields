@@ -2,7 +2,7 @@
 
 > Planned work, by section, and the ledger of open `sorry`s. A row moves to *Done* with the commit
 > that completes it. Rows were proposed in the planning phase (2026-11-19); the maintainer
-> approves sections for implementation (so far: J0, the nimber fields, J1a, J2a, J3, R1, J2b, J8, J8b, J8c, J8d, J8e, J8g, J9, FF-P2); `Status.md` says which.
+> approves sections for implementation (so far: J0, the nimber fields, J1a, J2a, J3, J10, R1, R2, J2b, J8, J8b, J8c, J8d, J8e, J8g, J9, FF-P2); `Status.md` says which.
 
 Sections: **V** vault content, **T** tooling and site, **R** research, **L** Lean, **J** Julia. Characteristic 2
 comes first in every section.
@@ -78,19 +78,13 @@ comes first in every section.
 
 ## R — Research
 
-- **R2 — Write out the order-preservation proof** of the rank encoding (an echelon-basis argument,
-  now a sketch in [[Canonical extension of the nimbers]]; brute-force checked for 13 small fields),
-  and consider a Lean statement of the structure on CombinatorialGames' `Nimber` (proposed, not
-  approved).
-
 ## J — Julia (`FiniteFieldArithmetic.jl`)
 
-- **J10 — Rank-encoded $\mathbb{F}_{2^n}$ for every $n \le 128$** (ADR-0005; proposed 2026-11-21,
-  not approved): a type built from `research/nimber_closure/data/rank/n_*.txt`; products through
-  the internal polynomial basis (J1a's Barrett arithmetic) and the change of basis; `Nimber`
-  unchanged for $n = 2^k$; `embed` by the inclusion matrices; `==`/`hash` across degrees through
-  the smallest subfield (absorbs J9b for the default representation). Tests first, against the
-  research data and its checks.
+- **J10 — Rank-encoded fields, remaining** (approved 2026-11-21; the type is done, see *Done*):
+  faster `minimal_degree`/`hash` (Frobenius-power byte tables per maximal divisor; now 1.7 µs at
+  $n = 126$); bulk operations (`MulBy`, matrix products, bitsliced vectors) for `Nim`, converting
+  once at the boundary; `embed` between `Nim` and the Conway fields (now possible canonically:
+  the Conway generator is an element of $\mathbf{On}_2$).
 - **J1a — Representations, remaining** (approved 2026-11-21; first part done, see *Done*):
   nimbers for $n = 2^k$, Conway polynomials for every $n$ (pseudo-Conway beyond the tables),
   standard polynomials (AES, GHASH, ...); selected by a type parameter; conversion maps between
@@ -164,6 +158,15 @@ No `sorry` exists yet. Each row: file, declaration, note, date added.
 
 ## Done
 
+- **J10 — Rank-encoded $\mathbb{F}_{2^n}$ for every $n \le 128$** (approved and done 2026-11-21):
+  `nim_field(n)` (`Nimber` for $2^k$, `Nim{n, T}` otherwise), products via the internal polynomial
+  basis, `embed` by the inclusions of $\mathbf{On}_2$, `==`/`hash`/promotion across all degrees,
+  `minimal_degree`/`reduce_field` (J9b for the default). Products 3.6–58 ns. Details in
+  `src/nimfield.md`.
+- **R2 — The rank encoding is order-preserving** (approved and done 2026-11-21): proof written out
+  ([[Rank encoding is order-preserving]]); its combinatorial step formalized in Lean without
+  `sorry` (`lean/FiniteFields/RankEncoding.lean`, `spanSum_strictMono`); the On_2 digit structure
+  (DiMuro Lemma 1.1) not formalized.
 - **R1 — Canonical extension of the nimbers, step 2** (approved and done 2026-11-21): research
   implementation of Conway's $\mathbf{On}_2$ below $\omega^{\omega^\omega}$
   (`research/nimber_closure/`); Lenstra's $\alpha_u$ for every prime $u \le 127$ (13 reproduce

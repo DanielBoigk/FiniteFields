@@ -21,10 +21,21 @@ matrix size!"), **FF-P2** (2026-11-20: "Go ahead with it!"), **J9** (2026-11-20:
 is the next item? Please implement!", then chose J9 when asked which) and **J1a** (2026-11-21:
 "Please implement the next item!", then chose J1a, Conway fields, when asked which) and **J3**
 (2026-11-21: "Why is J3 not approved? I would say I approve it!"), **ADR-0005 and R1**
-(2026-11-21: "Approve ADR-0005 and R1, go ahead with step 2"). Ask before starting a backlog
-section the maintainer has not approved.
+(2026-11-21: "Approve ADR-0005 and R1, go ahead with step 2"), **J10 and R2** (2026-11-21:
+"J10 & R2 approved!"). Ask before starting a backlog section the maintainer has not approved.
 
 ## Done last
+
+- **J10: `nim_field(n)` for every $n \le 128$** (`src/nimfield.jl`, note `src/nimfield.md`, data
+  `src/nim_data.jl` generated from R1, tests `test/nimfield.jl`, benchmark `bench/nimfield.jl`):
+  `Nimber` for $n = 2^k$, `Nim{n, T}` otherwise, elements stored as ranks; products 3.6–58 ns
+  (Conway + three byte-table maps); `embed`, `==`, `hash`, promotion across all degrees through
+  $\mathbf{On}_2$; `minimal_degree`/`reduce_field`. Verified: `Pkg.test()` passes (2 622 552 checks,
+  Aqua, JET), including agreement with the R1 data for every degree.
+- **R2: the order-preservation proof** ([[Rank encoding is order-preserving]]) and its combinatorial
+  step in Lean (`lean/FiniteFields/RankEncoding.lean`, no `sorry`; `lake build` passes). Not
+  formalized: the digit structure of $\mathbf{On}_2$ (DiMuro Lemma 1.1).
+- **Not verified:** CI (`lean.yml`, `julia.yml`, Full CI), other Julia versions; the jldoctests.
 
 - **R1 and ADR-0005: the rank encoding of every $\mathbb{F}_{2^n} \subset \mathbf{On}_2$**
   ([[ADR-0005 Rank encoding of GF(2^n) in Conway's On2]], accepted; results in
@@ -133,10 +144,9 @@ every element.
 
 ## Open questions for the maintainer
 
-00. **Next for the canonical encoding:** approve **J10** (the library type for every $n \le 128$
-   from the R1 data) and/or **R2** (write out the proof; a Lean statement)? With ADR-0005 the J1a
-   questions 0(a) (root convention) and pseudo-Conway are moot for the default; J1a stays as the
-   Conway alternative.
+00. **Next:** within the approved J10, faster `minimal_degree`/`hash`, bulk operations for `Nim`,
+   and `embed` between `Nim` and the Conway fields remain (Backlog). Not approved: a Lean
+   connection of the digit structure to CombinatorialGames' `Nimber`; J9b for Conway fields.
 0. **J1a decisions taken provisionally (2026-11-21), please confirm or change:**
    (a) the nimber ↔ Conway isomorphism sends $\alpha_{2^k}$ to the *smaller integer* of the two
    compatible roots ($r_3 =$ `0x61` in GF(256); table in `src/polyfield.md`); (b) no implicit

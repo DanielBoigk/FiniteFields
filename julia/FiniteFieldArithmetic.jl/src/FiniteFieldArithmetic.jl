@@ -23,6 +23,9 @@ Polynomial-basis fields ``\\mathbb{F}_2[x]/(f)`` (`src/polyfield.md`): [`PolyEle
 the Conway fields ([`conway_field`](@ref)), [`GF256_AES`](@ref), [`GF2_128_GHASH`](@ref), and
 [`embed`](@ref) between Conway fields and between Conway and nimber fields.
 
+The canonical fields ``\\mathbb{F}_{2^n} \\subset \\mathbf{On}_2`` for every ``n \\le 128``
+(ADR-0005, `src/nimfield.md`): [`nim_field`](@ref), [`Nim`](@ref), with `Nimber` for ``n = 2^k``.
+
 The smallest field of an element (`src/subfield.md`): [`minimal_level`](@ref),
 [`minimal_degree`](@ref), [`reduce_field`](@ref).
 
@@ -41,6 +44,7 @@ export minimal_level, minimal_degree, reduce_field
 export MulBy, BitslicedVector
 export PolyElement, poly_field, conway_field, conway_degrees, conway_generator, is_conway
 export GF256_AES, GF2_128_GHASH, embed
+export Nim, nim_field
 
 include("binaryfield.jl")
 include("nimber.jl")
@@ -50,5 +54,6 @@ include("bitsliced_matmul.jl")
 include("subfield.jl")
 include("polyfield.jl")
 include("inversion.jl")
+include("nimfield.jl")
 
 end
