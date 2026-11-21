@@ -42,6 +42,16 @@ using JET, Test
         @test_opt x^7
     end
     @test_opt conway_field(Val(8))
+    # inversion strategies (J3)
+    for F in (GF256, GF2_16, GF2_64, GF2_128, conway_field(Val(8)), conway_field(Val(64)),
+              conway_field(Val(127)), GF2_128_GHASH)
+        x = F(5)
+        for s in (FiniteFieldArithmetic.Fermat(), FiniteFieldArithmetic.ItohTsujii(),
+                  FiniteFieldArithmetic.Euclid())
+            @test_opt inverse(s, x)
+        end
+        @test_opt inv(x)
+    end
     # bulk operations (J8)
     for F in (GF256, GF2_16, GF2_32, GF2_64, GF2_128)
         x = F(0x53)
