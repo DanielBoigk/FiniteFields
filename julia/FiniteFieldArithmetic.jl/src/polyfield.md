@@ -99,10 +99,9 @@ strategy for polynomial-basis fields so far. Tables for small $n$ are the obviou
 
 ## Inverses
 
-The extended Euclidean algorithm on $(f, a)$ with the invariant $s_i a \equiv r_i \pmod f$,
-stopping at $r = 1$; $f$ needs $N + 1$ bits, so the algorithm runs in the next wider type. At
-$N = 128$ there is none, and `inv` computes $a^{2^{128} - 2}$ (Fermat, about 254 products).
-Faster inversion (Itoh–Tsujii, a 128-bit Euclid) is J3.
+Since J3 (`src/inversion.md`): `inv` uses `default_inv_strategy`, `ItohTsujii()` for every
+polynomial-basis field; `Euclid()` and `Fermat()` are available through `inverse`. (In the first
+version of J1a, `inv` was Euclid in the next wider type, and Fermat at $N = 128$.)
 
 ## Nimbers and Conway fields
 
@@ -187,9 +186,9 @@ Reading:
   is already in the polynomial basis. Below GF(2^32) the nimber tables win (0.4 against 2.9 ns
   at GF(256)). This is a measurement, not a proposal to change ADR-0004; it is a question for
   the maintainer (bulk work in a polynomial basis, converting at the boundary for 1.85 ns).
-- **Inverses** are slow: the Euclidean algorithm here reduces one bit at a time, about
-  $N^2/2$ steps; 400 ns at degree 64 and 3 µs for GHASH (Fermat, no 129-bit type). Faster
-  inversion is J3 (Itoh–Tsujii; a word-wise or table-assisted Euclid).
+- **Inverses** were slow in this first version: Euclid one bit at a time (about $2N$ steps),
+  400 ns at degree 64, and Fermat (3 µs) for GHASH. Since J3 the default is Itoh–Tsujii, 81 ns
+  at degree 64 and 340 ns for GHASH (`src/inversion.md`).
 - **Conway → Conway embeddings** recompute $\beta = \alpha_n^{(2^n-1)/(2^m-1)}$ (about $2n$
   products) and then do $m$ products per element. Byte tables of the linear map, computed once
   per pair, would make them cost what the nimber isomorphisms cost (about 2 ns). Not done.

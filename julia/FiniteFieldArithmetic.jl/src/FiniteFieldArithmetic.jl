@@ -9,7 +9,9 @@ Arithmetic in finite fields, characteristic 2 first. Implemented so far: the nim
 Multiplication strategies ([`MulStrategy`](@ref): [`Recursive`](@ref), [`MulTable`](@ref),
 [`LogTable`](@ref), [`LogTable16`](@ref), [`CLMul`](@ref)) are reached through [`mul`](@ref) and
 [`inverse`](@ref); `*` uses [`default_strategy`](@ref), `inv` (and `/`)
-[`default_inv_strategy`](@ref).
+[`default_inv_strategy`](@ref). Inversion strategies for every representation
+([`InvStrategy`](@ref): [`Fermat`](@ref), [`ItohTsujii`](@ref), [`Euclid`](@ref);
+`src/inversion.md`).
 
 Bulk operations (`src/bulk.md`): fast `rand!` for arrays, [`MulBy`](@ref) (multiplication by a
 constant), matrix products ([`matmul!`](@ref) with a [`MatMulStrategy`](@ref), among them
@@ -47,5 +49,6 @@ include("bulk.jl")
 include("bitsliced_matmul.jl")
 include("subfield.jl")
 include("polyfield.jl")
+include("inversion.jl")
 
 end

@@ -21,14 +21,14 @@ function ref_inv_poly(x::F) where {F}
     n = degree(F)
     f = (big(1) << n) | big(FiniteFieldArithmetic.field_modulus(F))
     deg(a) = iszero(a) ? -1 : ndigits(a; base = 2) - 1
-    pmod(a) = (while deg(a) >= n; a = xor(a, f << (deg(a) - n)); end; a)
-    function mulmod(a, b)
-        r = big(0)
-        while !iszero(b)
-            isodd(b) && (r = xor(r, a))
-            a, b = a << 1, b >> 1
+    pmod(c) = (while deg(c) >= n; c = xor(c, f << (deg(c) - n)); end; c)
+    function mulmod(u, v)             # (names distinct from the outer locals: a closure
+        acc = big(0)                  # assigning `r` would share the outer `r`)
+        while !iszero(v)
+            isodd(v) && (acc = xor(acc, u))
+            u, v = u << 1, v >> 1
         end
-        return pmod(r)
+        return pmod(acc)
     end
     r, a, e = big(1), big(bits(x)), big(2)^n - 2
     while e > 0
@@ -39,7 +39,7 @@ function ref_inv_poly(x::F) where {F}
     return r
 end
 
-samples(F, rng) = degree(F) <= 10 ? [x for x in elements(F) if !iszero(x)] :
+inv_samples(F, rng) = degree(F) <= 10 ? [x for x in elements(F) if !iszero(x)] :
     [x for x in vcat(rand(rng, F, 400), [one(F), F(max_bits_of(F))]) if !iszero(x)]
 max_bits_of(F) = (big(1) << degree(F)) - 1
 
@@ -47,7 +47,7 @@ max_bits_of(F) = (big(1) << degree(F)) - 1
     rng = Xoshiro(31)
     for F in NIMBER_LEVELS, s in INV_STRATEGIES
         @testset "$F, $s" begin
-            for x in samples(F, rng)
+            for x in inv_samples(F, rng)
                 y = inverse(s, x)
                 @test y isa F
                 @test y == inverse(Recursive(), x)
@@ -65,7 +65,7 @@ end
     rng = Xoshiro(32)
     for F in POLY_FIELDS, s in INV_STRATEGIES
         @testset "$F, $s" begin
-            xs = samples(F, rng)
+            xs = inv_samples(F, rng)
             for x in xs
                 y = inverse(s, x)
                 @test y isa F

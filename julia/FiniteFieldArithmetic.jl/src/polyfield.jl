@@ -16,8 +16,8 @@ smallest unsigned type with at least `N` bits (`N ≤ 128`).
 default representation for degrees that are not a power of two (ADR-0004). Also defined:
 [`GF256_AES`](@ref), [`GF2_128_GHASH`](@ref).
 
-Products use carry-less multiplication and Barrett reduction (`polyfield.md`), inverses the
-extended Euclidean algorithm. Elements of different fields are never equal; maps between fields
+Products use carry-less multiplication and Barrett reduction (`polyfield.md`); inverses use
+[`default_inv_strategy`](@ref) (`src/inversion.md`). Elements of different fields are never equal; maps between fields
 are explicit, through [`embed`](@ref).
 """
 struct PolyElement{N, T <: Unsigned, F} <: BinaryFieldElement
@@ -129,46 +129,13 @@ const SmallStorage = Union{UInt8, UInt16, UInt32, UInt64}
         q = H ⊻ ((tl >> N) | (th << (128 - N)))
         return (lo ⊻ clmul128_lo(q, F)) & max_bits(P)
     end
-
-    # Inverse of a ≠ 0 by the extended Euclidean algorithm on f and a, in a type W wide enough for
-    # f (N + 1 bits), given by the value `w::W` (any; see poly_mul_bits on types as arguments).
-    # Invariant: s_i · a ≡ r_i (mod f); it stops at r = 1.
-    @inline function poly_inv_bits(x::P, w::W) where {N, T, F, P <: PolyElement{N, T, F},
-                                                       W <: Unsigned}
-        top(v) = 8 * sizeof(W) - 1 - leading_zeros(v)
-        r0, r1 = (one(W) << N) | (F % W), bits(x) % W
-        s0, s1 = zero(W), one(W)
-        while r1 != one(W)
-            d1 = top(r1)
-            d0 = top(r0)
-            while d0 >= d1
-                sh = d0 - d1
-                r0 ⊻= r1 << sh
-                s0 ⊻= s1 << sh
-                d0 = top(r0)
-            end
-            r0, r1 = r1, r0
-            s0, s1 = s1, s0
-        end
-        return s1 % T
-    end
 end
-
-# The type for Euclid: N + 1 bits. At N = 128 there is none, and inv uses Fermat instead.
-euclid_type(N::Int) = N < 128 ? poly_storage(N + 1) : Nothing
 
 @stable default_mode = "error" begin
     mul(::CLMul, a::P, b::P) where {P <: PolyElement} =
         unsafe_frombits(P, poly_mul_bits(a, b))
 
     Base.:*(a::P, b::P) where {P <: PolyElement} = mul(CLMul(), a, b)
-
-    function Base.inv(a::P) where {N, T, F, P <: PolyElement{N, T, F}}
-        iszero(a) && throw(DivideError())
-        W = euclid_type(N)
-        W === Nothing && return Base.power_by_squaring(a, multiplicative_order(P) - one(T))
-        return unsafe_frombits(P, poly_inv_bits(a, zero(W)))
-    end
 end
 
 @doc """
