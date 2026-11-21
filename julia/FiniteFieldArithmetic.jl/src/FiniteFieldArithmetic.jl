@@ -17,6 +17,10 @@ constant), matrix products ([`matmul!`](@ref) with a [`MatMulStrategy`](@ref), a
 `LinearAlgebra.mul!` use [`default_matmul_strategy`](@ref)), [`BitslicedVector`](@ref), and the
 strategies of `c .* a` ([`ConstMulStrategy`](@ref), chosen by [`default_constmul_strategy`](@ref)).
 
+Polynomial-basis fields ``\\mathbb{F}_2[x]/(f)`` (`src/polyfield.md`): [`PolyElement`](@ref),
+the Conway fields ([`conway_field`](@ref)), [`GF256_AES`](@ref), [`GF2_128_GHASH`](@ref), and
+[`embed`](@ref) between Conway fields and between Conway and nimber fields.
+
 The smallest field of an element (`src/subfield.md`): [`minimal_level`](@ref),
 [`minimal_degree`](@ref), [`reduce_field`](@ref).
 
@@ -33,6 +37,8 @@ export BinaryFieldElement, Nimber, GF2, GF4, GF16, GF256, GF2_16, GF2_32, GF2_64
 export characteristic, degree, elements
 export minimal_level, minimal_degree, reduce_field
 export MulBy, BitslicedVector
+export PolyElement, poly_field, conway_field, conway_degrees, conway_generator, is_conway
+export GF256_AES, GF2_128_GHASH, embed
 
 include("binaryfield.jl")
 include("nimber.jl")
@@ -40,5 +46,6 @@ include("nimber_fast.jl")
 include("bulk.jl")
 include("bitsliced_matmul.jl")
 include("subfield.jl")
+include("polyfield.jl")
 
 end

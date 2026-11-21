@@ -265,15 +265,20 @@ function byte_tables!(tab::Matrix{T}, img::AbstractVector{T}) where {T <: Unsign
     return tab
 end
 
-function PolyBasis(::Type{F}) where {F <: Nimber}
-    T = storagetype(F)
+PolyBasis(::Type{F}) where {F <: Nimber} =
+    PolyBasis(F, F(find_root(F, poly_modulus(storagetype(F)))))
+
+# The change of basis between the nimber basis of F and the basis 1, α, …, α^(n-1) for a given α
+# whose powers are linearly independent (a root of an irreducible polynomial of degree n). Also
+# used for the isomorphisms with the Conway fields (polyfield.jl), where n may be below the bit
+# width of the storage type.
+function PolyBasis(::Type{F}, α::F) where {K, T, F <: Nimber{K, T}}
     n = degree(F)
-    α = F(find_root(F, poly_modulus(T)))
     cols = Vector{T}(undef, n)                   # α^i in nimber bits
-    p = one(F)
+    p = one(T)
     for i in 1:n
-        cols[i] = bits(p)
-        p = mul(MulTable(), p, α)
+        cols[i] = p
+        p = nim_mul_bits(MulTable(), p, bits(α), Val(K))
     end
     # Invert the matrix with columns α^i: eliminate to pivots (distinct top bits), tracking the
     # combination of columns; then reduce each unit vector through the pivots, highest first.
@@ -299,7 +304,9 @@ function PolyBasis(::Type{F}) where {F <: Nimber}
         iszero(v) || error("change of basis: elimination failed ($T)")
         c
     end
-    return PolyBasis{T}(bits(α), byte_tables(inv_img), byte_tables(cols))
+    # byte_tables wants an image for every bit of T; bits at n and above never occur
+    pad(v) = vcat(v, zeros(T, 8 * sizeof(T) - n))
+    return PolyBasis{T}(bits(α), byte_tables(pad(inv_img)), byte_tables(pad(cols)))
 end
 
 const POLY16 = PolyBasis(GF2_16)
