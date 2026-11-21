@@ -8,6 +8,7 @@ using Test
     @testset "constant times array in broadcasts (J8c)" include("constmul.jl")
     @testset "default strategy of inv" include("inv_default.jl")
     @testset "smallest field of an element (J9)" include("subfield.jl")
+    @testset "polynomial-basis and Conway fields (J1a)" include("conway.jl")
     @testset "printing" include("printing.jl")
     @testset "static checks" begin
         include("aqua.jl")

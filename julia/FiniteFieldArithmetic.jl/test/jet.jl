@@ -32,6 +32,16 @@ using JET, Test
         @test_opt inv(x)
         @test_opt x / y
     end
+    # polynomial-basis fields (J1a)
+    for F in (conway_field(Val(3)), conway_field(Val(8)), conway_field(Val(64)),
+              conway_field(Val(127)), GF256_AES, GF2_128_GHASH)
+        x, y = F(5), F(3)
+        @test_opt x * y
+        @test_opt inv(x)
+        @test_opt x / y
+        @test_opt x^7
+    end
+    @test_opt conway_field(Val(8))
     # bulk operations (J8)
     for F in (GF256, GF2_16, GF2_32, GF2_64, GF2_128)
         x = F(0x53)
